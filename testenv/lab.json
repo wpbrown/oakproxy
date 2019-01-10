@@ -1,0 +1,612 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "dnsPrefix": {
+      "type": "string",
+      "metadata": {
+        "description": "Prefix for dns name of all lab VMs."
+      }
+    },
+    "sourceIp": {
+      "type": "string",
+      "metadata": {
+        "description": "Allow access to the lab environment from this IP."
+      }
+    },
+    "domainName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the lab domain."
+      }
+    },
+    "domainNetbiosName": {
+      "type": "string",
+      "metadata": {
+        "description": "Netbios name of the lab domain."
+      }
+    },
+    "adminPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Password for the domain admin and server local admins."
+      }
+    },
+    "userPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Password for the user and service accounts."
+      }
+    },
+    "vmSize": {
+      "type": "string",
+      "defaultValue": "Standard_A2_v2"
+    },
+    "diskSku": {
+      "type": "string",
+      "defaultValue": "StandardSSD_LRS"
+    }
+  },
+  "variables": {
+    "dnsPrefix": "[concat(parameters('dnsPrefix'), '-')]"
+  },
+  "resources": [
+    {
+      "apiVersion": "2018-08-01",
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "name": "lab-nsg",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "securityRules": [
+          {
+            "name": "rdp-nsgr",
+            "properties": {
+              "description": "Allow RDP from client.",
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "3389",
+              "sourceAddressPrefix": "[parameters('sourceIp')]",
+              "destinationAddressPrefix": "VirtualNetwork",
+              "access": "Allow",
+              "priority": 100,
+              "direction": "Inbound"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "2018-08-01",
+      "type": "Microsoft.Network/virtualNetworks",
+      "name": "lab-vnet",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "lab-nsg"
+      ],
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "10.0.0.0/16"
+          ]
+        },
+        "subnets": [
+          {
+            "name": "labsubnet",
+            "properties": {
+              "addressPrefix": "10.0.0.0/24",
+              "networkSecurityGroup": {
+                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', 'lab-nsg')]"
+              }
+            }
+          }
+        ],
+        "dhcpOptions": {
+          "dnsServers": [
+            "10.0.0.10"
+          ]
+        }
+      }
+    },
+    {
+      "apiVersion": "2018-08-01",
+      "type": "Microsoft.Network/publicIPAddresses",
+      "name": "addc-pip",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "publicIPAllocationMethod": "Dynamic",
+        "dnsSettings": {
+          "domainNameLabel": "[concat(variables('dnsPrefix'),'addc')]"
+        }
+      }
+    },
+    {
+      "apiVersion": "2018-08-01",
+      "type": "Microsoft.Network/networkInterfaces",
+      "name": "addc-nic",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "Microsoft.Network/publicIPAddresses/addc-pip",
+        "Microsoft.Network/virtualNetworks/lab-vnet"
+      ],
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "privateIPAllocationMethod": "Static",
+              "privateIPAddress": "10.0.0.10",
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses', 'addc-pip')]"
+              },
+              "subnet": {
+                "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', 'lab-vnet', 'labsubnet')]"
+              }
+            }
+          }
+        ],
+        "dnsSettings": {
+          "dnsServers": [
+            "168.63.129.16"
+          ]
+        }
+      }
+    },
+    {
+      "apiVersion": "2018-06-01",
+      "type": "Microsoft.Compute/virtualMachines",
+      "name": "addc-vm",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "addc-nic"
+      ],
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "[parameters('vmSize')]"
+        },
+        "osProfile": {
+          "computerName": "addc",
+          "adminUsername": "xoda",
+          "adminPassword": "[parameters('adminPassword')]"
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "MicrosoftWindowsServer",
+            "offer": "WindowsServer",
+            "sku": "2016-Datacenter",
+            "version": "latest"
+          },
+          "osDisk": {
+            "name": "addc-vmOSDisk",
+            "caching": "ReadWrite",
+            "createOption": "FromImage",
+            "managedDisk": {
+              "storageAccountType": "[parameters('diskSku')]"
+            }
+          }
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', 'addc-nic')]"
+            }
+          ]
+        },
+        "licenseType": "Windows_Server"
+      },
+      "resources": [
+        {
+          "type": "extensions",
+          "name": "dscext",
+          "apiVersion": "2018-06-01",
+          "location": "[resourceGroup().location]",
+          "dependsOn": [
+            "[resourceId('Microsoft.Compute/virtualMachines', 'addc-vm')]"
+          ],
+          "properties": {
+            "publisher": "Microsoft.Powershell",
+            "type": "DSC",
+            "typeHandlerVersion": "2.77",
+            "autoUpgradeMinorVersion": true,
+            "settings": {
+              "configuration": {
+                "url": "https://rebeaglelabdeploy.blob.core.windows.net/deploy/labconfig.ps1.zip",
+                "script": "labconfig.ps1",
+                "function": "CreateDomain"
+              },
+              "configurationArguments": {
+                "DomainName": "[parameters('domainName')]",
+                "DomainNetbiosName": "[parameters('domainNetbiosName')]"
+              }
+            },
+            "protectedSettings": {
+              "configurationArguments": {
+                "AdminPassword": {
+                  "userName": "[concat(parameters('domainNetbiosName'),'\\xoda')]",
+                  "Password": "[parameters('adminPassword')]"
+                },
+                "UserPassword": {
+                  "userName": "not_used",
+                  "Password": "[parameters('userPassword')]"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "apiVersion": "2018-08-01",
+      "type": "Microsoft.Network/publicIPAddresses",
+      "name": "appserv-pip",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "publicIPAllocationMethod": "Dynamic",
+        "dnsSettings": {
+          "domainNameLabel": "[concat(variables('dnsPrefix'),'appserv')]"
+        }
+      }
+    },
+    {
+      "apiVersion": "2018-08-01",
+      "type": "Microsoft.Network/networkInterfaces",
+      "name": "appserv-nic",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "appserv-pip",
+        "lab-vnet"
+      ],
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "privateIPAllocationMethod": "Static",
+              "privateIPAddress": "10.0.0.11",
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses', 'appserv-pip')]"
+              },
+              "subnet": {
+                "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', 'lab-vnet', 'labsubnet')]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "2018-06-01",
+      "type": "Microsoft.Compute/virtualMachines",
+      "name": "appserv-vm",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "appserv-nic",
+        "[resourceId('Microsoft.Compute/virtualMachines/extensions', 'addc-vm', 'dscext')]"
+      ],
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "[parameters('vmSize')]"
+        },
+        "osProfile": {
+          "computerName": "appserv",
+          "adminUsername": "localadmin",
+          "adminPassword": "[parameters('adminPassword')]"
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "MicrosoftWindowsServer",
+            "offer": "WindowsServer",
+            "sku": "2016-Datacenter",
+            "version": "latest"
+          },
+          "osDisk": {
+            "name": "appserv-os-dsk",
+            "caching": "ReadWrite",
+            "createOption": "FromImage",
+            "managedDisk": {
+              "storageAccountType": "[parameters('diskSku')]"
+            }
+          }
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', 'appserv-nic')]"
+            }
+          ]
+        },
+        "licenseType": "Windows_Server"
+      },
+      "resources": [
+        {
+          "type": "extensions",
+          "name": "dscext",
+          "apiVersion": "2018-06-01",
+          "location": "[resourceGroup().location]",
+          "dependsOn": [
+            "appserv-vm"
+          ],
+          "properties": {
+            "publisher": "Microsoft.Powershell",
+            "type": "DSC",
+            "typeHandlerVersion": "2.77",
+            "autoUpgradeMinorVersion": true,
+            "settings": {
+              "configuration": {
+                "url": "https://rebeaglelabdeploy.blob.core.windows.net/deploy/labconfig.ps1.zip",
+                "script": "labconfig.ps1",
+                "function": "JoinDomain"
+              },
+              "configurationArguments": {
+                "DomainName": "[parameters('domainName')]"
+              }
+            },
+            "protectedSettings": {
+              "configurationArguments": {
+                "AdminPassword": {
+                  "userName": "[concat(parameters('domainNetbiosName'),'\\xoda')]",
+                  "Password": "[parameters('adminPassword')]"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "apiVersion": "2018-08-01",
+      "type": "Microsoft.Network/publicIPAddresses",
+      "name": "okproxyserv-pip",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "publicIPAllocationMethod": "Dynamic",
+        "dnsSettings": {
+          "domainNameLabel": "[concat(variables('dnsPrefix'),'okproxyserv')]"
+        }
+      }
+    },
+    {
+      "apiVersion": "2018-08-01",
+      "type": "Microsoft.Network/networkInterfaces",
+      "name": "okproxyserv-nic",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "okproxyserv-pip",
+        "lab-vnet"
+      ],
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "privateIPAllocationMethod": "Static",
+              "privateIPAddress": "10.0.0.12",
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses', 'okproxyserv-pip')]"
+              },
+              "subnet": {
+                "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', 'lab-vnet', 'labsubnet')]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "2018-06-01",
+      "type": "Microsoft.Compute/virtualMachines",
+      "name": "okproxyserv-vm",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "okproxyserv-nic",
+        "[resourceId('Microsoft.Compute/virtualMachines/extensions', 'addc-vm', 'dscext')]"
+      ],
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "[parameters('vmSize')]"
+        },
+        "osProfile": {
+          "computerName": "okproxyserv",
+          "adminUsername": "localadmin",
+          "adminPassword": "[parameters('adminPassword')]"
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "MicrosoftWindowsServer",
+            "offer": "WindowsServer",
+            "sku": "2016-Datacenter",
+            "version": "latest"
+          },
+          "osDisk": {
+            "name": "okproxyserv-os-dsk",
+            "caching": "ReadWrite",
+            "createOption": "FromImage",
+            "managedDisk": {
+              "storageAccountType": "[parameters('diskSku')]"
+            }
+          }
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', 'okproxyserv-nic')]"
+            }
+          ]
+        },
+        "licenseType": "Windows_Server"
+      },
+      "resources": [
+        {
+          "type": "extensions",
+          "name": "dscext",
+          "apiVersion": "2018-06-01",
+          "location": "[resourceGroup().location]",
+          "dependsOn": [
+            "okproxyserv-vm"
+          ],
+          "properties": {
+            "publisher": "Microsoft.Powershell",
+            "type": "DSC",
+            "typeHandlerVersion": "2.77",
+            "autoUpgradeMinorVersion": true,
+            "settings": {
+              "configuration": {
+                "url": "https://rebeaglelabdeploy.blob.core.windows.net/deploy/labconfig.ps1.zip",
+                "script": "labconfig.ps1",
+                "function": "JoinDomain"
+              },
+              "configurationArguments": {
+                "DomainName": "[parameters('domainName')]"
+              }
+            },
+            "protectedSettings": {
+              "configurationArguments": {
+                "AdminPassword": {
+                  "userName": "[concat(parameters('domainNetbiosName'),'\\xoda')]",
+                  "Password": "[parameters('adminPassword')]"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "apiVersion": "2018-08-01",
+      "type": "Microsoft.Network/publicIPAddresses",
+      "name": "client-pip",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "publicIPAllocationMethod": "Dynamic",
+        "dnsSettings": {
+          "domainNameLabel": "[concat(variables('dnsPrefix'),'client')]"
+        }
+      }
+    },
+    {
+      "apiVersion": "2018-08-01",
+      "type": "Microsoft.Network/networkInterfaces",
+      "name": "client-nic",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "client-pip",
+        "lab-vnet"
+      ],
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "privateIPAllocationMethod": "Static",
+              "privateIPAddress": "10.0.0.13",
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses', 'client-pip')]"
+              },
+              "subnet": {
+                "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', 'lab-vnet', 'labsubnet')]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "2018-06-01",
+      "type": "Microsoft.Compute/virtualMachines",
+      "name": "client-vm",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "client-nic",
+        "[resourceId('Microsoft.Compute/virtualMachines/extensions', 'addc-vm', 'dscext')]"
+      ],
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "[parameters('vmSize')]"
+        },
+        "osProfile": {
+          "computerName": "client",
+          "adminUsername": "localadmin",
+          "adminPassword": "[parameters('adminPassword')]"
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "MicrosoftWindowsDesktop",
+            "offer": "Windows-10",
+            "sku": "rs5-pro",
+            "version": "latest"
+          },
+          "osDisk": {
+            "name": "client-os-dsk",
+            "caching": "ReadWrite",
+            "createOption": "FromImage",
+            "managedDisk": {
+              "storageAccountType": "[parameters('diskSku')]"
+            }
+          }
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', 'client-nic')]"
+            }
+          ]
+        },
+        "licenseType": "Windows_Client"
+      },
+      "resources": [
+        {
+          "apiVersion": "2018-06-01",
+          "type": "extensions",
+          "name": "client-cmdext",
+          "location": "[resourceGroup().location]",
+          "dependsOn": [
+            "client-vm"
+          ],
+          "properties": {
+            "publisher": "Microsoft.Compute",
+            "type": "CustomScriptExtension",
+            "typeHandlerVersion": "1.9",
+            "autoUpgradeMinorVersion": true,
+            "settings": {
+              "commandToExecute": "powershell.exe -Command \"& {Set-ExecutionPolicy Bypass -Scope LocalMachine -Force}\""
+            }
+          }
+        },
+        {
+          "type": "extensions",
+          "name": "client-dscext",
+          "apiVersion": "2018-06-01",
+          "location": "[resourceGroup().location]",
+          "dependsOn": [
+            "client-vm",
+            "[resourceId('Microsoft.Compute/virtualMachines/extensions', 'client-vm', 'client-cmdext')]"
+          ],
+          "properties": {
+            "publisher": "Microsoft.Powershell",
+            "type": "DSC",
+            "typeHandlerVersion": "2.77",
+            "autoUpgradeMinorVersion": true,
+            "settings": {
+              "configuration": {
+                "url": "https://rebeaglelabdeploy.blob.core.windows.net/deploy/labconfig.ps1.zip",
+                "script": "labconfig.ps1",
+                "function": "JoinDomain"
+              },
+              "configurationArguments": {
+                "DomainName": "[parameters('domainName')]"
+              }
+            },
+            "protectedSettings": {
+              "configurationArguments": {
+                "AdminPassword": {
+                  "userName": "[concat(parameters('domainNetbiosName'),'\\xoda')]",
+                  "Password": "[parameters('adminPassword')]"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "outputs": {}
+}
