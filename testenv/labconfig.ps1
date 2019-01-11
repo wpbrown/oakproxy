@@ -183,9 +183,9 @@ Configuration AppServ
         [string]$AppUrl
     )
 
-    Import-DscResource -ModuleName xDnsServer, xActiveDirectory, xWebAdministration, ComputerManagementDSC, PSDesiredStateConfiguration, xPSDesiredStateConfiguration
+    Import-DscResource -ModuleName xSmbShare, xSystemSecurity, xDnsServer, xActiveDirectory, xWebAdministration, ComputerManagementDSC, PSDesiredStateConfiguration, xPSDesiredStateConfiguration
 
-    $localIp = (Get-NetIPConfiguration).IPv4Address.IPAddress
+    $localIp = (Get-NetIPConfiguration).IPv4Address.IPAddress | Select-Object -First 1
 
     Node localhost
     {
@@ -196,7 +196,7 @@ Configuration AppServ
         }
 
         WindowsFeatureSet Services {
-            Name = @('Web-Webserver', 'Web-Asp-Net45', 'Web-Windows-Auth')
+            Name = @('Web-Webserver', 'Web-Asp-Net45', 'Web-Windows-Auth', 'FS-FileServer')
             Ensure = 'Present'
         }
 
@@ -270,6 +270,44 @@ Configuration AppServ
             Ensure = 'Present'
             PsDscRunAsCredential = $AdminPassword
             DependsOn = '[WindowsFeatureSet]Tools'
+        }
+
+        File LabDir {
+            DestinationPath = 'C:\shared'
+            Type = 'Directory'
+        }
+
+        File ScratchDir {
+            DestinationPath = 'D:\shared'
+            Type = 'Directory'
+        }
+
+        xSmbShare LabFileshare {
+            Name = 'lab'
+            Path = 'C:\shared'
+            FullAccess = 'Authenticated Users'
+            DependsOn = '[WindowsFeatureSet]Services', '[File]LabDir'
+        }
+
+        xSmbShare ScratchFileshare {
+            Name = 'scratch'
+            Path = 'D:\shared'
+            FullAccess = 'Authenticated Users'
+            DependsOn = '[WindowsFeatureSet]Services', '[File]ScratchDir'
+        }
+
+        xFileSystemAccessRule LabDirAcl {
+            Path = 'C:\shared'
+            Identity = 'Authenticated Users'
+            Rights = 'Modify'
+            DependsOn = '[File]LabDir'
+        }
+
+        xFileSystemAccessRule ScratchDirAcl {
+            Path = 'D:\shared'
+            Identity = 'Authenticated Users'
+            Rights = 'Modify'
+            DependsOn = '[File]ScratchDir'
         }
     }
 }
