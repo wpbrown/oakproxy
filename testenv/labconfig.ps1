@@ -1,4 +1,4 @@
-Configuration CreateDomain 
+Configuration CreateDomain
 {
     param
     (
@@ -19,29 +19,25 @@ Configuration CreateDomain
 
     Node localhost
     {
-        LocalConfigurationManager
-        {            
-            ActionAfterReboot = 'ContinueConfiguration'            
-            ConfigurationMode = 'ApplyAndAutoCorrect'            
-            RebootNodeIfNeeded = $true            
+        LocalConfigurationManager {
+            ActionAfterReboot = 'ContinueConfiguration'
+            ConfigurationMode = 'ApplyAndAutoCorrect'
+            RebootNodeIfNeeded = $true
         }
 
-        WindowsFeatureSet Services
-        { 
+        WindowsFeatureSet Services {
             Name = @('DNS', 'AD-Domain-Services')
             Ensure = 'Present'
             IncludeAllSubFeature = $true
         }
 
-        WindowsFeatureSet Tools
-        {
+        WindowsFeatureSet Tools {
             Name = @('RSAT-AD-Tools', 'RSAT-DHCP', 'RSAT-DNS-Server', 'GPMC')
             Ensure = 'Present'
             IncludeAllSubFeature = $true
         }
 
-        xADDomain LabDomain
-        {
+        xADDomain LabDomain {
             DomainName = $DomainName
             DomainNetbiosName = $DomainNetbiosName
             DomainAdministratorCredential = $AdminPassword
@@ -52,8 +48,7 @@ Configuration CreateDomain
             DependsOn = '[WindowsFeatureSet]Services'
         }
 
-        xADUser xoda
-        {
+        xADUser xoda {
             DomainName = $DomainName
             UserName = 'xoda'
             Password = $AdminPassword
@@ -61,8 +56,7 @@ Configuration CreateDomain
             DependsOn = '[xADDomain]LabDomain'
         }
 
-        xADUser user1
-        {
+        xADUser user1 {
             DomainName = $DomainName
             UserName = 'user1'
             Password = $UserPassword
@@ -70,8 +64,7 @@ Configuration CreateDomain
             DependsOn = '[xADDomain]LabDomain'
         }
 
-        xADUser user2
-        {
+        xADUser user2 {
             DomainName = $DomainName
             UserName = 'user2'
             Password = $UserPassword
@@ -79,27 +72,17 @@ Configuration CreateDomain
             DependsOn = '[xADDomain]LabDomain'
         }
 
-        xADUser xsokprox
-        {
+        xADUser xsokprox {
             DomainName = $DomainName
             UserName = 'xsokprox'
             Password = $UserPassword
             PasswordNeverExpires = $true
             DependsOn = '[xADDomain]LabDomain'
         }
-
-        xADUser xsapp
-        {
-            DomainName = $DomainName
-            UserName = 'xsapp'
-            Password = $UserPassword
-            PasswordNeverExpires = $true
-            DependsOn = '[xADDomain]LabDomain'
-        }
-   }
+    }
 }
 
-Configuration JoinDomain 
+Configuration JoinClient
 {
     param
     (
@@ -110,22 +93,183 @@ Configuration JoinDomain
         [string]$DomainName
     )
 
-    Import-DscResource -ModuleName ComputerManagementDSC
+    Import-DscResource -ModuleName ComputerManagementDSC, PSDesiredStateConfiguration
 
     Node localhost
     {
-        LocalConfigurationManager
-        {            
-            ActionAfterReboot = 'ContinueConfiguration'            
-            ConfigurationMode = 'ApplyAndAutoCorrect'            
-            RebootNodeIfNeeded = $true            
+        LocalConfigurationManager {
+            ActionAfterReboot = 'ContinueConfiguration'
+            ConfigurationMode = 'ApplyAndAutoCorrect'
+            RebootNodeIfNeeded = $true
         }
-        
-        Computer JoinComputer
-        {
+
+        Computer JoinComputer {
             Name = 'localhost'
             DomainName = $DomainName
             Credential = $AdminPassword
         }
-   }
+
+        Group RdpUsers {
+            GroupName = 'Remote Desktop Users'
+            MembersToInclude = @("$DomainName\user1", "$DomainName\user2")
+        }
+
+        foreach ($mode in @('SOFTWARE', 'SOFTWARE\WOW6432Node')) {
+            foreach ($config in @('Domains', 'EscDomains')) {
+                Registry "LocalZone-$($mode.replace('\','-'))-$config" {
+                    Key = "HKEY_LOCAL_MACHINE\$mode\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap\$config\$DomainName"
+                    ValueName = '*'
+                    Force = $true
+                    ValueData = '1'
+                    ValueType = 'Dword'
+                }
+            }
+        }
+    }
+}
+
+Configuration JoinProxy
+{
+    param
+    (
+        [Parameter(Mandatory)]
+        [PSCredential]$AdminPassword,
+
+        [Parameter(Mandatory)]
+        [string]$DomainName
+    )
+
+    Import-DscResource -ModuleName ComputerManagementDSC, PSDesiredStateConfiguration
+
+    Node localhost
+    {
+        LocalConfigurationManager {
+            ActionAfterReboot = 'ContinueConfiguration'
+            ConfigurationMode = 'ApplyAndAutoCorrect'
+            RebootNodeIfNeeded = $true
+        }
+
+        Computer JoinComputer {
+            Name = 'localhost'
+            DomainName = $DomainName
+            Credential = $AdminPassword
+        }
+
+        foreach ($mode in @('SOFTWARE', 'SOFTWARE\WOW6432Node')) {
+            foreach ($config in @('Domains', 'EscDomains')) {
+                Registry "LocalZone-$($mode.replace('\','-'))-$config" {
+                    Key = "HKEY_LOCAL_MACHINE\$mode\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap\$config\$DomainName"
+                    ValueName = '*'
+                    Force = $true
+                    ValueData = '1'
+                    ValueType = 'Dword'
+                }
+            }
+        }
+    }
+}
+
+Configuration AppServ
+{
+    param
+    (
+        [Parameter(Mandatory)]
+        [PSCredential]$AdminPassword,
+
+        [Parameter(Mandatory)]
+        [string]$DomainName,
+
+        [Parameter(Mandatory)]
+        [string]$AppUrl
+    )
+
+    Import-DscResource -ModuleName xDnsServer, xActiveDirectory, xWebAdministration, ComputerManagementDSC, PSDesiredStateConfiguration, xPSDesiredStateConfiguration
+
+    $localIp = (Get-NetIPConfiguration).IPv4Address.IPAddress
+
+    Node localhost
+    {
+        LocalConfigurationManager {
+            ActionAfterReboot = 'ContinueConfiguration'
+            ConfigurationMode = 'ApplyAndAutoCorrect'
+            RebootNodeIfNeeded = $true
+        }
+
+        WindowsFeatureSet Services {
+            Name = @('Web-Webserver', 'Web-Asp-Net45', 'Web-Windows-Auth')
+            Ensure = 'Present'
+        }
+
+        WindowsFeatureSet Tools {
+            Name = @('Web-Mgmt-Console', 'Web-Scripting-Tools', 'RSAT-AD-PowerShell', 'RSAT-DNS-Server')
+            Ensure = 'Present'
+        }
+
+        Computer JoinComputer {
+            Name = 'localhost'
+            DomainName = $DomainName
+            Credential = $AdminPassword
+        }
+
+        xRemoteFile DownloadTestApp {
+            Uri = $AppUrl
+            DestinationPath = 'C:\Packages\testapp.zip'
+            MatchSource = $false
+        }
+
+        Archive UnpackTestApp {
+            Path = 'C:\Packages\testapp.zip'
+            Destination = 'C:\inetpub\testapp'
+            DependsOn = '[xRemoteFile]DownloadTestApp'
+        }
+
+        xWebsite TestAppSite {
+            Ensure = 'Present'
+            Name = 'testapp'
+            State = 'Started'
+            PhysicalPath = 'C:\inetpub\testapp'
+            AuthenticationInfo = MSFT_xWebAuthenticationInformation {
+                Anonymous = $false
+                Basic = $false
+                Digest = $false
+                Windows = $true
+            }
+            BindingInfo = @(
+                MSFT_xWebBindingInformation {
+                    Protocol = 'http'
+                    Hostname = "testapp.$DomainName"
+                }
+                MSFT_xWebBindingInformation {
+                    Protocol = 'http'
+                    Hostname = 'testapp'
+                }
+            )
+            DependsOn = '[WindowsFeatureSet]Services', '[Archive]UnpackTestApp'
+        }
+
+        xADServicePrincipalName TestAppSpnShort {
+            ServicePrincipalName = 'http/testapp'
+            Account = 'appserv$'
+            DependsOn = '[WindowsFeatureSet]Tools', '[Computer]JoinComputer'
+            PsDscRunAsCredential = $AdminPassword
+        }
+
+        xADServicePrincipalName TestAppSpnLong {
+            ServicePrincipalName = "http/testapp.$DomainName"
+            Account = 'appserv$'
+            DependsOn = '[WindowsFeatureSet]Tools', '[Computer]JoinComputer'
+            PsDscRunAsCredential = $AdminPassword
+        }
+
+        xDnsRecord TestAppDnsRecord {
+            Name = 'testapp'
+            Zone = $DomainName
+            DnsServer = $DomainName
+            Target = $localIp
+            Type = 'ARecord'
+            Ensure = 'Present'
+            PsDscRunAsCredential = $AdminPassword
+            DependsOn = '[WindowsFeatureSet]Tools'
+        }
+    }
 }
