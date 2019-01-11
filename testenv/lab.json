@@ -69,7 +69,7 @@
     },
     "artifactsUrl": {
       "type": "string",
-      "defaultValue": "https://rebeaglelabdeploy.blob.core.windows.net/deploy"
+      "defaultValue": "https://github.com/wpbrown/oakproxy/releases/download/v0.0.1"
     }
   },
   "variables": {
