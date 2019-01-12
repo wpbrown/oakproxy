@@ -211,10 +211,27 @@ Configuration AppServ
             Credential = $AdminPassword
         }
 
+        # Workaround .NET not using Tls12 by default. Breaks xRemoteFile request to Github.
+        # https://github.com/PowerShell/xPSDesiredStateConfiguration/issues/393
+        Script EnableTLS12 {
+            SetScript = {
+                [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol.toString() + ', ' + [Net.SecurityProtocolType]::Tls12
+            }
+            TestScript = {
+               return ([Net.ServicePointManager]::SecurityProtocol -match 'Tls12')
+            }
+            GetScript = {
+                return @{
+                    Result = ([Net.ServicePointManager]::SecurityProtocol -match 'Tls12')
+                }
+            }
+        }
+
         xRemoteFile DownloadTestApp {
             Uri = $AppUrl
             DestinationPath = 'C:\Packages\testapp.zip'
             MatchSource = $false
+            DependsOn = '[Script]EnableTLS12'
         }
 
         Archive UnpackTestApp {
