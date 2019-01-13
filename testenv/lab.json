@@ -2,40 +2,51 @@
   "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
   "parameters": {
-    "dnsPrefix": {
-      "type": "string",
-      "metadata": {
-        "description": "Prefix for dns name of all lab VMs."
-      }
-    },
-    "sourceIp": {
-      "type": "string",
-      "metadata": {
-        "description": "Allow access to the lab environment from this IP."
-      }
-    },
-    "domainName": {
-      "type": "string",
-      "metadata": {
-        "description": "Name of the lab domain."
-      }
-    },
-    "domainNetbiosName": {
-      "type": "string",
-      "metadata": {
-        "description": "Netbios name of the lab domain."
-      }
-    },
     "adminPassword": {
       "type": "securestring",
       "metadata": {
-        "description": "Password for the domain admin and server local admins."
+        "description": "Password for the domain admin (xoda) and local admins (localadmin)."
       }
     },
     "userPassword": {
       "type": "securestring",
       "metadata": {
-        "description": "Password for the user and service accounts."
+        "description": "Password for the domain user (user1, user2) and service accounts (xsokprox)."
+      }
+    },
+    "domainName": {
+      "type": "string",
+      "defaultValue": "contoso.com",
+      "metadata": {
+        "description": "Name of the lab AD DS domain."
+      }
+    },
+    "domainNetbiosName": {
+      "type": "string",
+      "defaultValue": "contoso",
+      "metadata": {
+        "description": "Netbios name of the lab AD DS domain."
+      }
+    },
+    "sourceIp": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Allow access to the lab environment from this IP. (optional: A VPN gateway is created if an IP is not provided)"
+      }
+    },
+    "dnsPrefix": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Unique prefix for public DNS names of the VMs. (required only if 'sourceIp' is provided)"
+      }
+    },
+    "vpnCaCert": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "If using VPN gateway to connect to the lab, provide a CA cert. (optional: This can be done in the portal later)"
       }
     },
     "shutdownTime": {
@@ -79,10 +90,12 @@
       "appserv",
       "oakproxyserv",
       "client"
-    ]
+    ],
+    "useVpnNetworking": "[empty(parameters('sourceIp'))]"
   },
   "resources": [
     {
+      "condition": "[not(variables('useVpnNetworking'))]",
       "apiVersion": "2018-08-01",
       "type": "Microsoft.Network/networkSecurityGroups",
       "name": "lab-nsg",
@@ -125,9 +138,13 @@
             "name": "labsubnet",
             "properties": {
               "addressPrefix": "10.0.0.0/24",
-              "networkSecurityGroup": {
-                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', 'lab-nsg')]"
-              }
+              "networkSecurityGroup": "[if(variables('useVpnNetworking'), json('null'), json(concat('{ \"id\": \"', resourceId('Microsoft.Network/networkSecurityGroups', 'lab-nsg'), '\" }')))]"
+            }
+          },
+          {
+            "name": "GatewaySubnet",
+            "properties": {
+              "addressPrefix": "10.0.1.0/24"
             }
           }
         ],
@@ -135,18 +152,6 @@
           "dnsServers": [
             "10.0.0.10"
           ]
-        }
-      }
-    },
-    {
-      "apiVersion": "2018-08-01",
-      "type": "Microsoft.Network/publicIPAddresses",
-      "name": "addc-pip",
-      "location": "[resourceGroup().location]",
-      "properties": {
-        "publicIPAllocationMethod": "Dynamic",
-        "dnsSettings": {
-          "domainNameLabel": "[concat(variables('dnsPrefix'),'addc')]"
         }
       }
     },
@@ -166,9 +171,7 @@
             "properties": {
               "privateIPAllocationMethod": "Static",
               "privateIPAddress": "10.0.0.10",
-              "publicIPAddress": {
-                "id": "[resourceId('Microsoft.Network/publicIPAddresses', 'addc-pip')]"
-              },
+              "publicIPAddress": "[if(variables('useVpnNetworking'), json('null'), json(concat('{ \"id\": \"', resourceId('Microsoft.Network/publicIPAddresses', 'addc-pip'), '\" }')))]",
               "subnet": {
                 "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', 'lab-vnet', 'labsubnet')]"
               }
@@ -268,18 +271,6 @@
     },
     {
       "apiVersion": "2018-08-01",
-      "type": "Microsoft.Network/publicIPAddresses",
-      "name": "appserv-pip",
-      "location": "[resourceGroup().location]",
-      "properties": {
-        "publicIPAllocationMethod": "Dynamic",
-        "dnsSettings": {
-          "domainNameLabel": "[concat(variables('dnsPrefix'),'appserv')]"
-        }
-      }
-    },
-    {
-      "apiVersion": "2018-08-01",
       "type": "Microsoft.Network/networkInterfaces",
       "name": "appserv-nic",
       "location": "[resourceGroup().location]",
@@ -294,9 +285,7 @@
             "properties": {
               "privateIPAllocationMethod": "Static",
               "privateIPAddress": "10.0.0.11",
-              "publicIPAddress": {
-                "id": "[resourceId('Microsoft.Network/publicIPAddresses', 'appserv-pip')]"
-              },
+              "publicIPAddress": "[if(variables('useVpnNetworking'), json('null'), json(concat('{ \"id\": \"', resourceId('Microsoft.Network/publicIPAddresses', 'appserv-pip'), '\" }')))]",
               "subnet": {
                 "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', 'lab-vnet', 'labsubnet')]"
               }
@@ -388,18 +377,6 @@
     },
     {
       "apiVersion": "2018-08-01",
-      "type": "Microsoft.Network/publicIPAddresses",
-      "name": "oakproxyserv-pip",
-      "location": "[resourceGroup().location]",
-      "properties": {
-        "publicIPAllocationMethod": "Dynamic",
-        "dnsSettings": {
-          "domainNameLabel": "[concat(variables('dnsPrefix'),'oakproxyserv')]"
-        }
-      }
-    },
-    {
-      "apiVersion": "2018-08-01",
       "type": "Microsoft.Network/networkInterfaces",
       "name": "oakproxyserv-nic",
       "location": "[resourceGroup().location]",
@@ -414,9 +391,7 @@
             "properties": {
               "privateIPAllocationMethod": "Static",
               "privateIPAddress": "10.0.0.12",
-              "publicIPAddress": {
-                "id": "[resourceId('Microsoft.Network/publicIPAddresses', 'oakproxyserv-pip')]"
-              },
+              "publicIPAddress": "[if(variables('useVpnNetworking'), json('null'), json(concat('{ \"id\": \"', resourceId('Microsoft.Network/publicIPAddresses', 'oakproxyserv-pip'), '\" }')))]",
               "subnet": {
                 "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', 'lab-vnet', 'labsubnet')]"
               }
@@ -507,18 +482,6 @@
     },
     {
       "apiVersion": "2018-08-01",
-      "type": "Microsoft.Network/publicIPAddresses",
-      "name": "client-pip",
-      "location": "[resourceGroup().location]",
-      "properties": {
-        "publicIPAllocationMethod": "Dynamic",
-        "dnsSettings": {
-          "domainNameLabel": "[concat(variables('dnsPrefix'),'client')]"
-        }
-      }
-    },
-    {
-      "apiVersion": "2018-08-01",
       "type": "Microsoft.Network/networkInterfaces",
       "name": "client-nic",
       "location": "[resourceGroup().location]",
@@ -533,9 +496,7 @@
             "properties": {
               "privateIPAllocationMethod": "Static",
               "privateIPAddress": "10.0.0.13",
-              "publicIPAddress": {
-                "id": "[resourceId('Microsoft.Network/publicIPAddresses', 'client-pip')]"
-              },
+              "publicIPAddress": "[if(variables('useVpnNetworking'), json('null'), json(concat('{ \"id\": \"', resourceId('Microsoft.Network/publicIPAddresses', 'client-pip'), '\" }')))]",
               "subnet": {
                 "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', 'lab-vnet', 'labsubnet')]"
               }
@@ -644,6 +605,23 @@
       ]
     },
     {
+      "condition": "[not(variables('useVpnNetworking'))]",
+      "apiVersion": "2018-08-01",
+      "type": "Microsoft.Network/publicIPAddresses",
+      "name": "[concat(variables('shutdownVms')[copyIndex()], '-pip')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "publicIPAllocationMethod": "Dynamic",
+        "dnsSettings": {
+          "domainNameLabel": "[concat(variables('dnsPrefix'),variables('shutdownVms')[copyIndex()])]"
+        }
+      },
+      "copy": {
+        "name": "pipcopy",
+        "count": "[length(variables('shutdownVms'))]"
+      }
+    },
+    {
       "apiVersion": "2018-09-15",
       "type": "Microsoft.DevTestLab/schedules",
       "name": "[concat('shutdown-computevm-', variables('shutdownVms')[copyIndex()], '-vm')]",
@@ -669,6 +647,63 @@
         "name": "shutdowncopy",
         "count": "[length(variables('shutdownVms'))]"
       }
+    },
+    {
+      "condition": "[variables('useVpnNetworking')]",
+      "apiVersion": "2018-08-01",
+      "type": "Microsoft.Network/publicIPAddresses",
+      "name": "lab-vgw-pip",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "publicIPAllocationMethod": "Dynamic"
+      }
+    },
+    {
+      "condition": "[variables('useVpnNetworking')]",
+      "apiVersion": "2018-08-01",
+      "type": "Microsoft.Network/virtualNetworkGateways",
+      "name": "lab-vgw",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "default",
+            "properties": {
+              "privateIPAllocationMethod": "Dynamic",
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses', 'lab-vgw-pip')]"
+              },
+              "subnet": {
+                "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', 'lab-vnet', 'GatewaySubnet')]"
+              }
+            }
+          }
+        ],
+        "sku": {
+          "name": "Basic",
+          "tier": "Basic",
+          "capacity": 2
+        },
+        "gatewayType": "Vpn",
+        "vpnType": "RouteBased",
+        "enableBgp": false,
+        "activeActive": false,
+        "vpnClientConfiguration": {
+          "vpnClientAddressPool": {
+            "addressPrefixes": [
+              "10.1.0.0/16"
+            ]
+          },
+          "vpnClientProtocols": [
+            "SSTP"
+          ],
+          "vpnClientRootCertificates": "[if(not(empty(parameters('vpnCaCert'))), json(concat('[{\"name\": \"cacert\", \"properties\": { \"publicCertData\": \"', parameters('vpnCaCert'), '\" }}]')),  json('null'))]"
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/publicIPAddresses', 'lab-vgw-pip')]",
+        "[resourceId('Microsoft.Network/virtualNetworks', 'lab-vnet')]"
+      ]
     }
   ],
   "outputs": {}
