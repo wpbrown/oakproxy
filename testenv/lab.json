@@ -206,13 +206,14 @@
           "imageReference": {
             "publisher": "MicrosoftWindowsServer",
             "offer": "WindowsServer",
-            "sku": "2016-Datacenter",
+            "sku": "2016-Datacenter-smalldisk",
             "version": "latest"
           },
           "osDisk": {
             "name": "addc-os-dsk",
             "caching": "ReadWrite",
             "createOption": "FromImage",
+            "diskSizeGB": 32,
             "managedDisk": {
               "storageAccountType": "[parameters('diskSku')]"
             }
@@ -316,13 +317,14 @@
           "imageReference": {
             "publisher": "MicrosoftWindowsServer",
             "offer": "WindowsServer",
-            "sku": "2016-Datacenter",
+            "sku": "2016-Datacenter-smalldisk",
             "version": "latest"
           },
           "osDisk": {
             "name": "appserv-os-dsk",
             "caching": "ReadWrite",
             "createOption": "FromImage",
+            "diskSizeGB": 32,
             "managedDisk": {
               "storageAccountType": "[parameters('diskSku')]"
             }
@@ -422,13 +424,14 @@
           "imageReference": {
             "publisher": "MicrosoftWindowsServer",
             "offer": "WindowsServer",
-            "sku": "2016-Datacenter",
+            "sku": "2016-Datacenter-smalldisk",
             "version": "latest"
           },
           "osDisk": {
             "name": "oakproxyserv-os-dsk",
             "caching": "ReadWrite",
             "createOption": "FromImage",
+            "diskSizeGB": 32,
             "managedDisk": {
               "storageAccountType": "[parameters('diskSku')]"
             }
