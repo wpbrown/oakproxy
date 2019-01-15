@@ -72,12 +72,36 @@ Configuration CreateDomain
             DependsOn = '[xADDomain]LabDomain'
         }
 
-        xADUser xsokprox {
+        xADUser xsoakproxy {
             DomainName = $DomainName
-            UserName = 'xsokprox'
+            UserName = 'xsoakproxy'
             Password = $UserPassword
             PasswordNeverExpires = $true
             DependsOn = '[xADDomain]LabDomain'
+        }
+
+        xADServicePrincipalName TestProxySpnShort {
+            ServicePrincipalName = 'http/testproxy'
+            Account = 'xsoakproxy'
+            DependsOn = '[WindowsFeatureSet]Tools', '[xADUser]xsoakproxy'
+        }
+
+        Script EnableProxyDelegation {
+            SetScript = {
+                Get-ADUser -Identity 'xsoakproxy' | Set-ADAccountControl -TrustedToAuthForDelegation $true
+                Set-ADUser -Identity 'xsoakproxy' -Add @{'msDS-AllowedToDelegateTo' = @('http/testapp',"http/testapp.$($using:DomainName)")}
+            }
+            TestScript = {
+                $user = Get-ADUser -Identity 'xsoakproxy' -Properties 'msDS-AllowedToDelegateTo','TrustedToAuthForDelegation'
+                return (Compare-Object $user['msDS-AllowedToDelegateTo'] @('http/testapp',"http/testapp.$($using:DomainName)")) -eq $null -and $user['TrustedToAuthForDelegation']
+            }
+            GetScript = {
+                $user = Get-ADUser -Identity 'xsoakproxy' -Properties 'msDS-AllowedToDelegateTo','TrustedToAuthForDelegation'
+                return @{
+                    Result = $user | Select-Object 'msDS-AllowedToDelegateTo', 'TrustedToAuthForDelegation', 'SamAccountName' | ConvertTo-Json
+                }
+            }
+            DependsOn = '[WindowsFeatureSet]Tools', '[xADUser]xsoakproxy'
         }
     }
 }
