@@ -42,7 +42,7 @@ Name | Default | Description
 You can either provide the `sourceIp` parameter for Public IP mode or leave it empty for VPN mode. If you provide the `sourceIp` you must also provide `dnsPrefix`. 
 
 ### Public IP Mode
-Public IPs will be attached to each machine and an NSG will be applied to all machines that only allows ingress to the lab via RDP from `sourceIp`. If you IP changes you need to update the NSG rule.
+Public IPs will be attached to each machine and an NSG will be applied to all machines that only allows ingress to the lab via RDP from `sourceIp`. If your IP changes you need to update the NSG rule.
 
 ### VPN Mode
 A Virtual Network Gateway will be provisioned. If you provide `vpnCaCert` it will be installed. There are no public IPs in the lab and no NSG is provisioned. All access is via VPN and all traffic is allowed from the VPN client.
@@ -53,7 +53,7 @@ This is much more convenient for remote debugging and testing, although there is
 If you don't have a certificate to supply to `vpnCaCert` you can follow the docs for [PowerShell](https://docs.microsoft.com/en-us/azure/vpn-gateway/vpn-gateway-certificates-point-to-site), [StrongSwan](https://docs.microsoft.com/en-us/azure/vpn-gateway/vpn-gateway-certificates-point-to-site-linux), or my instructions for [OpenSSL](https://github.com/wpbrown/oakproxy/wiki/Azure-VPN-with-OpenSSL-CA).
 
 ## Deploying
-If you want to use VPN mode and you followed my OpenSSL procedure you can get your CA cert data like below. Otherwise populate CACERTDATA with you x509 certificate data string.
+If you want to use VPN mode and you followed my OpenSSL procedure you can get your CA cert data like below. Otherwise populate CACERTDATA with your x509 certificate data string.
 ```Shell
 $ CACERTDATA=$(cat pki/ca.crt | head -n -1 | tail -n +2 | tr -d '\n')
 ```
@@ -71,7 +71,7 @@ $ az group deployment create -n "labdeployment" -g "domainlab-rg" --template-fil
   "adminPassword=UpperLower$12" "userPassword=LowerUpper$12"
 ```
 
-If you intend to synchronize the domain with Azure AD, you should use a public domain name that you own.
+If you intend to synchronize the domain with Azure AD, you should provide a public domain name that you own rather than the default `contoso.com`.
 
 Depending on the size of the VMs the infrastructure can take about 45 minutes to fully deploy and configure. The Virtual Network Gateway takes about 30 minutes.
 
