@@ -80,7 +80,7 @@
     },
     "artifactsUrl": {
       "type": "string",
-      "defaultValue": "https://github.com/wpbrown/oakproxy/releases/download/v0.0.1"
+      "defaultValue": "https://github.com/wpbrown/oakproxy/releases/download/lab_artifacts"
     }
   },
   "variables": {
@@ -711,3 +711,4 @@
   ],
   "outputs": {}
 }
+
