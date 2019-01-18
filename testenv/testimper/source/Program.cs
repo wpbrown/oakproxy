@@ -38,7 +38,7 @@ namespace DemoImperClient
 #endif
 
             // Run Test without impersonation.
-            DoAsyncTest();
+            DoAsyncTest(o.TestUrl);
 
             // Setup impersonation.
             AdjustPrivileges(enableTcb: o.UseTcb, enableImpersonate: o.UseImpersonate);
@@ -52,13 +52,13 @@ namespace DemoImperClient
             {
                 Console.WriteLine($"Impersonation User: {Environment.UserName}");
                 // Run Test with impersonation.
-                DoAsyncTest();
+                DoAsyncTest(o.TestUrl);
             });
 
             Console.WriteLine("TestImper end.");
         }
 
-        private static void DoAsyncTest()
+        private static void DoAsyncTest(string url)
         {
             var handler = new HttpClientHandler()
             {
@@ -68,7 +68,7 @@ namespace DemoImperClient
             var client = new HttpClient(handler);
             try
             {
-                var res = client.GetAsync("http://testapp.corp.rebeaglelab.space/api").Result;
+                var res = client.GetAsync(url).Result;
                 var data = res.Content.ReadAsStringAsync().Result;
                 if (res.StatusCode == System.Net.HttpStatusCode.OK)
                     Console.WriteLine($"API Result Data: {data}");
@@ -123,6 +123,9 @@ namespace DemoImperClient
 
         [Option('i', "useimpersonate", Required = false)]
         public bool UseImpersonate { get; set; }
+
+        [Option('u', "url", Required = false, Default = "http://testapp.corp.beaglelab.space/api")]
+        public string TestUrl { get; set; }
 
 #if COREFX
         [Option('s', "usesockethandler", Required = false)]
