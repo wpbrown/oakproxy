@@ -1,0 +1,215 @@
+Z:\impernet>whoami
+beaglelab\xsoakproxy
+
+Z:\impernet>whoami /priv
+
+PRIVILEGES INFORMATION
+----------------------
+
+Privilege Name                Description                    State
+============================= ============================== ========
+SeChangeNotifyPrivilege       Bypass traverse checking       Enabled
+SeIncreaseWorkingSetPrivilege Increase a process working set Disabled
+
+Z:\impernet>.\testimper-netfx.exe
+TestImper Begin.
+App Runtime: .NETFramework,Version=v4.6.1
+Primary User: xsoakproxy
+API Result Data: {"Message":"Hello","Name":"beaglelab\\xsoakproxy","IsAuthenticated":true,"AuthenticationType":"Negotiate"}
+Current Privileges:
+  ChangeNotify         => Enabled
+  IncreaseWorkingSet   => Disabled
+Requesting Token Name: user1@beaglelab
+Impersonation Token Name: beaglelab\user1
+Impersonation Token Level: Identification
+Impersonation User: user1
+API Result Data: {"Message":"Hello","Name":"beaglelab\\user1","IsAuthenticated":true,"AuthenticationType":"Negotiate"}
+TestImper end.
+
+========================================================================================================
+========================================================================================================
+
+Z:\impercore>whoami
+beaglelab\xsoakproxy
+
+Z:\impercore>whoami /priv
+
+PRIVILEGES INFORMATION
+----------------------
+
+Privilege Name                Description                               State
+============================= ========================================= ========
+SeTcbPrivilege                Act as part of the operating system       Disabled
+SeChangeNotifyPrivilege       Bypass traverse checking                  Enabled
+SeImpersonatePrivilege        Impersonate a client after authentication Enabled
+SeIncreaseWorkingSetPrivilege Increase a process working set            Disabled
+
+Z:\impercore>.\testimper-corefx.exe
+TestImper Begin.
+App Runtime: .NETCoreApp,Version=v2.2
+Primary User: xsoakproxy
+UseSocketsHttpHandler: False
+API Result Data: {"Message":"Hello","Name":"beaglelab\\xsoakproxy","IsAuthenticated":true,"AuthenticationType":"Negotiate"}
+Current Privileges:
+  TrustedComputerBase  => Disabled
+  ChangeNotify         => Enabled
+  Impersonate          => Disabled
+  IncreaseWorkingSet   => Disabled
+Requesting Token Name: user1@beaglelab
+Impersonation Token Name: beaglelab\user1
+Impersonation Token Level: Identification
+Impersonation User: user1
+API Result Error: Unauthorized (401)
+TestImper end.
+
+Z:\impercore>.\testimper-corefx.exe -i
+TestImper Begin.
+App Runtime: .NETCoreApp,Version=v2.2
+Primary User: xsoakproxy
+UseSocketsHttpHandler: False
+API Result Data: {"Message":"Hello","Name":"beaglelab\\xsoakproxy","IsAuthenticated":true,"AuthenticationType":"Negotiate"}
+Current Privileges:
+  TrustedComputerBase  => Disabled
+  ChangeNotify         => Enabled
+  Impersonate          => Enabled
+  IncreaseWorkingSet   => Disabled
+Requesting Token Name: user1@beaglelab
+Impersonation Token Name: beaglelab\user1
+Impersonation Token Level: Identification
+Impersonation User: user1
+API Result Error: Unauthorized (401)
+TestImper end.
+
+Z:\impercore>.\testimper-corefx.exe -t
+TestImper Begin.
+App Runtime: .NETCoreApp,Version=v2.2
+Primary User: xsoakproxy
+UseSocketsHttpHandler: False
+API Result Data: {"Message":"Hello","Name":"beaglelab\\xsoakproxy","IsAuthenticated":true,"AuthenticationType":"Negotiate"}
+Current Privileges:
+  TrustedComputerBase  => Enabled
+  ChangeNotify         => Enabled
+  Impersonate          => Disabled
+  IncreaseWorkingSet   => Disabled
+Requesting Token Name: user1@beaglelab
+Impersonation Token Name: beaglelab\user1
+Impersonation Token Level: Impersonation
+Impersonation User: user1
+API Result Data: {"Message":"Hello","Name":"beaglelab\\user1","IsAuthenticated":true,"AuthenticationType":"Negotiate"}
+TestImper end.
+
+Z:\impercore>.\testimper-corefx.exe -s
+TestImper Begin.
+App Runtime: .NETCoreApp,Version=v2.2
+Primary User: xsoakproxy
+UseSocketsHttpHandler: True
+API Result Data: {"Message":"Hello","Name":"beaglelab\\xsoakproxy","IsAuthenticated":true,"AuthenticationType":"Negotiate"}
+Current Privileges:
+  TrustedComputerBase  => Disabled
+  ChangeNotify         => Enabled
+  Impersonate          => Disabled
+  IncreaseWorkingSet   => Disabled
+Requesting Token Name: user1@beaglelab
+Impersonation Token Name: beaglelab\user1
+Impersonation Token Level: Identification
+Impersonation User: user1
+API Call Exception:
+System.AggregateException: One or more errors occurred. (This is usually a temporary error during hostname resolution and means that the local server did not receive a response from an authoritative server) ---> System.Net.Http.HttpRequestException: This is usually a temporary error during hostname resolution and means that the local server did not receive a response from an authoritative server ---> System.Net.Sockets.SocketException: This is usually a temporary error during hostname resolution and means that the local server did not receive a response from an authoritative server
+   at System.Net.Http.ConnectHelper.ConnectAsync(String host, Int32 port, CancellationToken cancellationToken)
+   --- End of inner exception stack trace ---
+   at System.Net.Http.ConnectHelper.ConnectAsync(String host, Int32 port, CancellationToken cancellationToken)
+   at System.Threading.Tasks.ValueTask`1.get_Result()
+   at System.Net.Http.HttpConnectionPool.CreateConnectionAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+   at System.Threading.Tasks.ValueTask`1.get_Result()
+   at System.Net.Http.HttpConnectionPool.WaitForCreatedConnectionAsync(ValueTask`1 creationTask)
+   at System.Threading.Tasks.ValueTask`1.get_Result()
+   at System.Net.Http.HttpConnectionPool.SendWithRetryAsync(HttpRequestMessage request, Boolean doRequestAuth, CancellationToken cancellationToken)
+   at System.Net.Http.AuthenticationHelper.SendWithAuthAsync(HttpRequestMessage request, Uri authUri, ICredentials credentials, Boolean preAuthenticate, Boolean isProxyAuth, Boolean doRequestAuth, HttpConnectionPool pool, CancellationToken cancellationToken)
+   at System.Net.Http.RedirectHandler.SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+   at System.Net.Http.HttpClient.FinishSendAsyncBuffered(Task`1 sendTask, HttpRequestMessage request, CancellationTokenSource cts, Boolean disposeCts)
+   --- End of inner exception stack trace ---
+   at System.Threading.Tasks.Task`1.GetResultCore(Boolean waitCompletionNotification)
+   at DemoImperClient.Program.DoAsyncTest()
+---> (Inner Exception #0) System.Net.Http.HttpRequestException: This is usually a temporary error during hostname resolution and means that the local server did not receive a response from an authoritative server ---> System.Net.Sockets.SocketException: This is usually a temporary error during hostname resolution and means that the local server did not receive a response from an authoritative server
+   at System.Net.Http.ConnectHelper.ConnectAsync(String host, Int32 port, CancellationToken cancellationToken)
+   --- End of inner exception stack trace ---
+   at System.Net.Http.ConnectHelper.ConnectAsync(String host, Int32 port, CancellationToken cancellationToken)
+   at System.Threading.Tasks.ValueTask`1.get_Result()
+   at System.Net.Http.HttpConnectionPool.CreateConnectionAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+   at System.Threading.Tasks.ValueTask`1.get_Result()
+   at System.Net.Http.HttpConnectionPool.WaitForCreatedConnectionAsync(ValueTask`1 creationTask)
+   at System.Threading.Tasks.ValueTask`1.get_Result()
+   at System.Net.Http.HttpConnectionPool.SendWithRetryAsync(HttpRequestMessage request, Boolean doRequestAuth, CancellationToken cancellationToken)
+   at System.Net.Http.AuthenticationHelper.SendWithAuthAsync(HttpRequestMessage request, Uri authUri, ICredentials credentials, Boolean preAuthenticate, Boolean isProxyAuth, Boolean doRequestAuth, HttpConnectionPool pool, CancellationToken cancellationToken)
+   at System.Net.Http.RedirectHandler.SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+   at System.Net.Http.HttpClient.FinishSendAsyncBuffered(Task`1 sendTask, HttpRequestMessage request, CancellationTokenSource cts, Boolean disposeCts)<---
+
+TestImper end.
+
+Z:\impercore>.\testimper-corefx.exe -s -i
+TestImper Begin.
+App Runtime: .NETCoreApp,Version=v2.2
+Primary User: xsoakproxy
+UseSocketsHttpHandler: True
+API Result Data: {"Message":"Hello","Name":"beaglelab\\xsoakproxy","IsAuthenticated":true,"AuthenticationType":"Negotiate"}
+Current Privileges:
+  TrustedComputerBase  => Disabled
+  ChangeNotify         => Enabled
+  Impersonate          => Enabled
+  IncreaseWorkingSet   => Disabled
+Requesting Token Name: user1@beaglelab
+Impersonation Token Name: beaglelab\user1
+Impersonation Token Level: Identification
+Impersonation User: user1
+API Call Exception:
+System.AggregateException: One or more errors occurred. (This is usually a temporary error during hostname resolution and means that the local server did not receive a response from an authoritative server) ---> System.Net.Http.HttpRequestException: This is usually a temporary error during hostname resolution and means that the local server did not receive a response from an authoritative server ---> System.Net.Sockets.SocketException: This is usually a temporary error during hostname resolution and means that the local server did not receive a response from an authoritative server
+   at System.Net.Http.ConnectHelper.ConnectAsync(String host, Int32 port, CancellationToken cancellationToken)
+   --- End of inner exception stack trace ---
+   at System.Net.Http.ConnectHelper.ConnectAsync(String host, Int32 port, CancellationToken cancellationToken)
+   at System.Threading.Tasks.ValueTask`1.get_Result()
+   at System.Net.Http.HttpConnectionPool.CreateConnectionAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+   at System.Threading.Tasks.ValueTask`1.get_Result()
+   at System.Net.Http.HttpConnectionPool.WaitForCreatedConnectionAsync(ValueTask`1 creationTask)
+   at System.Threading.Tasks.ValueTask`1.get_Result()
+   at System.Net.Http.HttpConnectionPool.SendWithRetryAsync(HttpRequestMessage request, Boolean doRequestAuth, CancellationToken cancellationToken)
+   at System.Net.Http.AuthenticationHelper.SendWithAuthAsync(HttpRequestMessage request, Uri authUri, ICredentials credentials, Boolean preAuthenticate, Boolean isProxyAuth, Boolean doRequestAuth, HttpConnectionPool pool, CancellationToken cancellationToken)
+   at System.Net.Http.RedirectHandler.SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+   at System.Net.Http.HttpClient.FinishSendAsyncBuffered(Task`1 sendTask, HttpRequestMessage request, CancellationTokenSource cts, Boolean disposeCts)
+   --- End of inner exception stack trace ---
+   at System.Threading.Tasks.Task`1.GetResultCore(Boolean waitCompletionNotification)
+   at DemoImperClient.Program.DoAsyncTest()
+---> (Inner Exception #0) System.Net.Http.HttpRequestException: This is usually a temporary error during hostname resolution and means that the local server did not receive a response from an authoritative server ---> System.Net.Sockets.SocketException: This is usually a temporary error during hostname resolution and means that the local server did not receive a response from an authoritative server
+   at System.Net.Http.ConnectHelper.ConnectAsync(String host, Int32 port, CancellationToken cancellationToken)
+   --- End of inner exception stack trace ---
+   at System.Net.Http.ConnectHelper.ConnectAsync(String host, Int32 port, CancellationToken cancellationToken)
+   at System.Threading.Tasks.ValueTask`1.get_Result()
+   at System.Net.Http.HttpConnectionPool.CreateConnectionAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+   at System.Threading.Tasks.ValueTask`1.get_Result()
+   at System.Net.Http.HttpConnectionPool.WaitForCreatedConnectionAsync(ValueTask`1 creationTask)
+   at System.Threading.Tasks.ValueTask`1.get_Result()
+   at System.Net.Http.HttpConnectionPool.SendWithRetryAsync(HttpRequestMessage request, Boolean doRequestAuth, CancellationToken cancellationToken)
+   at System.Net.Http.AuthenticationHelper.SendWithAuthAsync(HttpRequestMessage request, Uri authUri, ICredentials credentials, Boolean preAuthenticate, Boolean isProxyAuth, Boolean doRequestAuth, HttpConnectionPool pool, CancellationToken cancellationToken)
+   at System.Net.Http.RedirectHandler.SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+   at System.Net.Http.HttpClient.FinishSendAsyncBuffered(Task`1 sendTask, HttpRequestMessage request, CancellationTokenSource cts, Boolean disposeCts)<---
+
+TestImper end.
+
+Z:\impercore>.\testimper-corefx.exe -s -t
+TestImper Begin.
+App Runtime: .NETCoreApp,Version=v2.2
+Primary User: xsoakproxy
+UseSocketsHttpHandler: True
+API Result Data: {"Message":"Hello","Name":"beaglelab\\xsoakproxy","IsAuthenticated":true,"AuthenticationType":"Negotiate"}
+Current Privileges:
+  TrustedComputerBase  => Enabled
+  ChangeNotify         => Enabled
+  Impersonate          => Disabled
+  IncreaseWorkingSet   => Disabled
+Requesting Token Name: user1@beaglelab
+Impersonation Token Name: beaglelab\user1
+Impersonation Token Level: Impersonation
+Impersonation User: user1
+API Result Data: {"Message":"Hello","Name":"beaglelab\\user1","IsAuthenticated":true,"AuthenticationType":"Negotiate"}
+TestImper end.
+
+Z:\impercore>
