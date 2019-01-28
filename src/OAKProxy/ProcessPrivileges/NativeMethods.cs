@@ -17,6 +17,7 @@ namespace ProcessPrivileges
     internal static class NativeMethods
     {
         internal const int ErrorInsufficientBuffer = 122;
+        internal const int ErrorNoToken = 0x3f0;
 
         private const string AdvApi32 = "advapi32.dll";
 
@@ -74,5 +75,18 @@ namespace ProcessPrivileges
             [In] ProcessHandle processHandle,
             [In] TokenAccessRights desiredAccess,
             [In, Out] ref IntPtr tokenHandle);
+
+        [DllImport(AdvApi32, SetLastError = true),
+        SuppressUnmanagedCodeSecurity]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool OpenThreadToken(
+            [In] ThreadHandle processHandle,
+            [In] TokenAccessRights desiredAccess,
+            [In] bool openAsSelf,
+            [In, Out] ref IntPtr tokenHandle);
+
+        [DllImport(Kernel32, SetLastError = true),
+        SuppressUnmanagedCodeSecurity]
+        internal static extern IntPtr GetCurrentThread();
     }
 }

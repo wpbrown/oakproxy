@@ -6,9 +6,9 @@ namespace OAKProxy.Proxy
 {
     internal class JwtBearerConfiguration : IPostConfigureOptions<JwtBearerOptions>
     {
-        private readonly OKProxyOptions _proxyOptions;
+        private readonly OAKProxyOptions _proxyOptions;
 
-        public JwtBearerConfiguration(IOptions<OKProxyOptions> proxyOptions)
+        public JwtBearerConfiguration(IOptions<OAKProxyOptions> proxyOptions)
         {
             _proxyOptions = proxyOptions.Value;
         }

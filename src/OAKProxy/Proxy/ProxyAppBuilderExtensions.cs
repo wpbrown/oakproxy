@@ -1,7 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
-using OKProxy.Proxy;
+using OAKProxy.Proxy;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 

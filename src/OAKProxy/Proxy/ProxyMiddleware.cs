@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
+using System.Reflection;
 using System.Security.Principal;
 using System.Threading;
 using System.Threading.Tasks;
@@ -10,8 +12,9 @@ using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using OAKProxy.Proxy;
+using ProcessPrivileges;
 
-namespace OKProxy.Proxy
+namespace OAKProxy.Proxy
 {
     public class ProxyMiddleware
     {
@@ -38,14 +41,29 @@ namespace OKProxy.Proxy
         {
             using (var requestMessage = CreateHttpRequestMessageFromIncomingRequest(context.Request, destinationAppUri))
             {
-                // The impersonation identity is attached to the async execution context with AsyncLocal.
-                await WindowsIdentity.RunImpersonated(domainIdentity.AccessToken, async () => {
+#if NETFX
+                await ResolveHostInMessage(requestMessage);
+#endif
+                var proc = System.Diagnostics.Process.GetCurrentProcess();
+                await WindowsIdentity.RunImpersonated(domainIdentity.AccessToken, async () =>
+                {
                     using (var responseMessage = await httpForwarder.ForwardAsync(requestMessage, context.RequestAborted))
                     {
                         await CopyProxiedMessageToResponseAsync(context.Response, responseMessage, context.RequestAborted);
                     }
                 });
             }
+        }
+
+        private static async Task ResolveHostInMessage(HttpRequestMessage requestMessage)
+        {
+            Uri originalUri = requestMessage.RequestUri;
+            string originalHost = originalUri.Host;
+
+            var builder = new UriBuilder(originalUri);
+            var ip = await Dns.GetHostEntryAsync(originalUri.DnsSafeHost);
+            builder.Host = ip.AddressList.First().ToString();
+            requestMessage.RequestUri = builder.Uri;
         }
 
         private static HttpRequestMessage CreateHttpRequestMessageFromIncomingRequest(HttpRequest request, Uri destinationAppUri)

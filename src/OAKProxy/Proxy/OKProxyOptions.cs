@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 namespace OAKProxy.Proxy
 {
-    public class OKProxyOptions
+    public class OAKProxyOptions
     {
         public OKProxiedApplication[] ProxiedApplications { get; set; }
     }

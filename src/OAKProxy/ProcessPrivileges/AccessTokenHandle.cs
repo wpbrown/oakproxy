@@ -24,6 +24,23 @@ namespace ProcessPrivileges
             }
         }
 
+        internal AccessTokenHandle(ThreadHandle threadHandle, TokenAccessRights tokenAccessRights, bool openAsSelf = false)
+            : base(true)
+        {
+            if (!NativeMethods.OpenThreadToken(threadHandle, tokenAccessRights, true, ref handle))
+            {
+                var error = Marshal.GetLastWin32Error();
+                if (error == NativeMethods.ErrorNoToken)
+                {
+                    SetHandleAsInvalid();
+                }
+                else
+                {
+                    throw new Win32Exception(error);
+                }
+            }
+        }
+
         /// <summary>Releases the handle.</summary>
         /// <returns>Value indicating if the handle released successfully.</returns>
         [ReliabilityContract(Consistency.WillNotCorruptState, Cer.MayFail)]

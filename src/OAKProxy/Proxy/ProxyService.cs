@@ -1,23 +1,21 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
-using OAKProxy.Proxy;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net;
 using System.Security.Claims;
 using System.Security.Principal;
 
-namespace OKProxy.Proxy
+namespace OAKProxy.Proxy
 {
     public class ProxyService
     {
-        private readonly OKProxyOptions _options;
+        private readonly OAKProxyOptions _options;
         private readonly Dictionary<string, Uri> _routes;
         private readonly IMemoryCache _domainIdentityCache;
 
-        public ProxyService(IOptions<OKProxyOptions> options, IMemoryCache memoryCache)
+        public ProxyService(IOptions<OAKProxyOptions> options, IMemoryCache memoryCache)
         {
             if (options == null)
             {

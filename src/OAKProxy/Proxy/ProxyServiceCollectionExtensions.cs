@@ -1,7 +1,7 @@
-﻿using System;
-using OKProxy.Proxy;
+﻿using Microsoft.Extensions.DependencyInjection;
+using System;
 
-namespace Microsoft.Extensions.DependencyInjection
+namespace OAKProxy.Proxy
 {
     public static class ProxyServiceCollectionExtensions
     {

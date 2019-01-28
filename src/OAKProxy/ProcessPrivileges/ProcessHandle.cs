@@ -32,4 +32,24 @@ namespace ProcessPrivileges
             return true;
         }
     }
+
+    internal sealed class ThreadHandle : SafeHandleZeroOrMinusOneIsInvalid
+    {
+        internal ThreadHandle(IntPtr threadHandle, bool ownsHandle)
+            : base(ownsHandle)
+        {
+            handle = threadHandle;
+        }
+
+        [ReliabilityContract(Consistency.WillNotCorruptState, Cer.MayFail)]
+        protected override bool ReleaseHandle()
+        {
+            if (!NativeMethods.CloseHandle(handle))
+            {
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            }
+
+            return true;
+        }
+    }
 }

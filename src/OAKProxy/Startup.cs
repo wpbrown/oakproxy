@@ -4,8 +4,10 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using OAKProxy.PolicyEvaluator;
 using OAKProxy.Proxy;
+using System;
 using System.Net.Http;
 
 namespace OAKProxy
@@ -52,7 +54,7 @@ namespace OAKProxy
         private void ConfigureProxy(IServiceCollection services)
         {
             // Load the oakproxy configuration.
-            services.Configure<OKProxyOptions>(Configuration.GetSection("OKProxy"));
+            services.Configure<OAKProxyOptions>(Configuration.GetSection("OAKProxy"));
 
             // Limit bearer authorization based on proxied applications.
             services.ConfigureOptions<JwtBearerConfiguration>();
@@ -71,7 +73,7 @@ namespace OAKProxy
             });
         }
 
-        public void Configure(IApplicationBuilder app, IHostingEnvironment env)
+        public void Configure(IApplicationBuilder app, IHostingEnvironment env, HttpForwarder forwarder)
         {
             if (env.IsDevelopment())
             {
