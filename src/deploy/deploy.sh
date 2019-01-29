@@ -13,6 +13,6 @@ popd
 rm -rf "$packageDir"
 mkdir "$packageDir"
 
-zip -r -9 "$packageDir/oakproxy-core22.zip" "$sourceDir/bin/Release/netcoreapp2.2/win10-x64/publish"
-zip -r -9 "$packageDir/oakproxy-net472.zip" "$sourceDir/bin/Release/net472/win10-x64/publish"
+zip -jr9 "$packageDir/oakproxy-core22.zip" "$sourceDir/bin/Release/netcoreapp2.2/win10-x64/publish"
+zip -jr9 "$packageDir/oakproxy-net472.zip" "$sourceDir/bin/Release/net472/win10-x64/publish"
 
