@@ -52,6 +52,12 @@ This is much more convenient for remote debugging and testing, although there is
 ### VPN Configuration
 If you don't have a certificate to supply to `vpnCaCert` you can follow the docs for [PowerShell](https://docs.microsoft.com/en-us/azure/vpn-gateway/vpn-gateway-certificates-point-to-site), [StrongSwan](https://docs.microsoft.com/en-us/azure/vpn-gateway/vpn-gateway-certificates-point-to-site-linux), or my instructions for [OpenSSL](https://github.com/wpbrown/oakproxy/wiki/Azure-VPN-with-OpenSSL-CA).
 
+After deployment you can download the VPN client like so:
+```Shell
+$ url=$(az network vnet-gateway vpn-client generate -g "domainlab-rg" -n "lab-vgw" -o "tsv")
+$ wget -O vpn.zip "$url"
+```
+
 ## Deploying
 If you want to use VPN mode and you followed my OpenSSL procedure you can get your CA cert data like below. Otherwise populate CACERTDATA with your x509 certificate data string.
 ```Shell
