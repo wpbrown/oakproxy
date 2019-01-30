@@ -1,6 +1,4 @@
-<div style="font-size: 5em; font-family: 'Arial Black', Gadget, sans-serif">
-    <span style="color: #843c0c">OAK</span><span style="color: #00b050">Proxy</span>
-</div>
+![img](docs/images/title.svg)
 <hr/>
 
 OAKProxy is an OAuth2 to Kerberos gateway. Incoming connections are authorized with JWT bearer tokens. A kerberos token is retrieved for the user identified by the JWT and used to forward the request to a backend. Backend applications require zero modification as the proxied request will look just like one coming from a domain-joined client.
