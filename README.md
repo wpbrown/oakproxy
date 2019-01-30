@@ -7,6 +7,8 @@ OAKProxy is an OAuth2 to Kerberos gateway. Incoming connections are authorized w
 
 AD domain authentication is often a roadblock when enterprises attempt to start modernizing a legacy system using the [strangler pattern](https://docs.microsoft.com/en-us/azure/architecture/patterns/strangler). The strangler pattern advocates incrementally peeling functionality out of the legacy system in to a new environment. However, legacy and modern authentication do not mix. A service running in Azure with an Azure AD security principal has no trust in the AD domain. OAKProxy is a gateway that allows the AD domain to trust Azure AD identity. With OAKProxy, modern amd legacy authentication can coexist in a single system.
 
+OAKProxy is for bearer authentication (e.g. REST API calls) only. If you are looking for a browser session aware (OIDC to Kerberos) proxy, see [Azure AD Application Proxy](https://docs.microsoft.com/en-us/azure/active-directory/manage-apps/application-proxy).
+
 ## Features
 
 * A single instance can proxy any number of applications.
@@ -15,7 +17,29 @@ AD domain authentication is often a roadblock when enterprises attempt to start 
 * Translate application identities (token acquired via client credential grant) to domain users.
 * Each AD domain application gets a unique identity with roles and scopes in Azure AD.
 
-OAKProxy is for bearer authentication (e.g. REST API calls) only. If you are looking for a browser session aware (OIDC to Kerberos) proxy, see [Azure AD Application Proxy](https://docs.microsoft.com/en-us/azure/active-directory/manage-apps/application-proxy).
+# Documentation
+
+- [Documentation](#documentation)
+- [Security](#security)
+	- [Mitigation](#mitigation)
+	- [Service Account Rights](#service-account-rights)
+- [Identity Translation](#identity-translation)
+	- [Users](#users)
+	- [Applications](#applications)
+- [Deployment Scenarios](#deployment-scenarios)
+	- [High Availability](#high-availability)
+- [Prerequisites](#prerequisites)
+	- [Kerberos](#kerberos)
+	- [Service Account](#service-account)
+		- [Configure a gMSA for Constrained Delegation](#configure-a-gmsa-for-constrained-delegation)
+- [Installation](#installation)
+- [Uninstallation](#uninstallation)
+- [Application Configuration](#application-configuration)
+	- [Register Applications in Azure AD](#register-applications-in-azure-ad)
+		- [Optional Claims for Alternate Logon ID](#optional-claims-for-alternate-logon-id)
+	- [Configuration File](#configuration-file)
+- [Troubleshooting](#troubleshooting)
+- [Roadmap](#roadmap)
 
 # Security
 
@@ -30,6 +54,20 @@ Using a gMSA is recommended to limit the potential for abuse of abuse of the pri
 ## Service Account Rights
 
 There are 2 build types available: `net472` is dependent on .NET Framework 4.7.2 being installed and `core22` is dependent on the .NET Core 2.2 runtime being installed. Due to limitations in .NET Core, the `core22` build requires the service account to have the 'Act as part of the operating system user right on the server hosting OAKProxy. If this is not permissible in your environment, stick with the `net472` build type.
+
+# Identity Translation
+
+There are 2 Azure AD identity types that OAKProxy will translate to domain identities: user principals and application service principals.
+
+## Users
+
+In the simplest scenario, the domain is being synchronized to Azure AD by Azure AD Connect. The Azure AD UPN is equivilant to the AD DS UPN. The `upn` claim of the incoming access JWT token will simply be looked up in AD DS.
+
+Not all environments use the AD DS UPN to populate the Azure AD UPN (e.g. AD `mail` attribute is sometimes used for the cloud UPN). This is known as [alternate login ID](https://docs.microsoft.com/en-us/windows-server/identity/ad-fs/operations/configuring-alternate-login-id). In this scenario you must configure [optional claims](#optional-claims-for-alternate-logon-id) for each of your applications. This will cause Azure AD to include the `onprem_sid` claim in the access token. OAKProxy will use this claim to look up the user in AD DS by their SID. 
+
+## Applications
+
+TODO
 
 # Deployment Scenarios
 
@@ -107,6 +145,8 @@ TODO
 ## Register Applications in Azure AD
 
 TODO
+
+### Optional Claims for Alternate Logon ID
 
 ## Configuration File
 
