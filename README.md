@@ -1,11 +1,15 @@
-# OAKProxy
-OAKProxy is an OAuth2 to Kerberos gateway. Incoming connections are authorized with JWT bearer. A kerberos token is retrieved for the user identified by the JWT and used to forward the request to a backend. One instance of OAKProxy can service any number of applications.
+<div style="font-size: 5em; font-family: 'Arial Black', Gadget, sans-serif">
+    <span style="color: #843c0c">OAK</span><span style="color: #00b050">Proxy</span>
+</div>
+<hr/>
+
+OAKProxy is an OAuth2 to Kerberos gateway. Incoming connections are authorized with JWT bearer tokens. A kerberos token is retrieved for the user identified by the JWT and used to forward the request to a backend. Backend applications require zero modification as the proxied request will look just like one coming from a domain-joined client.
 
 ![img](docs/images/highlevel.svg)
 
 AD domain authentication is often a roadblock when enterprises attempt to start modernizing a legacy system using the [strangler pattern](https://docs.microsoft.com/en-us/azure/architecture/patterns/strangler). The strangler pattern advocates incrementally peeling functionality out of the legacy system in to a new environment. However, legacy and modern authentication do not mix. A service running in Azure with an Azure AD security principal has no trust in the AD domain. OAKProxy is a gateway that allows the AD domain to trust Azure AD identity. With OAKProxy, modern amd legacy authentication can coexist in a single system.
 
-### Features
+## Features
 
 * A single instance can proxy any number of applications.
 * Stateless. Can be deployed in a highly-available configuration.
@@ -15,33 +19,33 @@ AD domain authentication is often a roadblock when enterprises attempt to start 
 
 OAKProxy is for bearer authentication (e.g. REST API calls) only. If you are looking for a browser session aware (OIDC to Kerberos) proxy, see [Azure AD Application Proxy](https://docs.microsoft.com/en-us/azure/active-directory/manage-apps/application-proxy).
 
-## Security
+# Security
 
 Because the service account that runs OAKProxy is trusted for delegation, the account and the machine that runs the service should be considered part of your [Tier 0 identity infrastructure](https://docs.microsoft.com/en-us/windows-server/identity/securing-privileged-access/securing-privileged-access-reference-material). 
 
-### Mitigation
+## Mitigation
 
 The service account should always be configured for *constrained* delegation. This limits OAKProxy's ability to impersonate users only to a list of services maintained by a privileged user such as a Domain Admin.
 
 Using a gMSA is recommended to limit the potential for abuse of abuse of the privileged service account. This applies to all privileged service accounts, not just OAKProxy.
 
-### Service Account Rights
+## Service Account Rights
 
 There are 2 build types available: `net472` is dependent on .NET Framework 4.7.2 being installed and `core22` is dependent on the .NET Core 2.2 runtime being installed. Due to limitations in .NET Core, the `core22` build requires the service account to have the 'Act as part of the operating system user right on the server hosting OAKProxy. If this is not permissible in your environment, stick with the `net472` build type.
 
-## Deployment Scenarios
+# Deployment Scenarios
 
 TODO
 
-### High Availability
+## High Availability
 
 TODO
 
-## Prerequisites
+# Prerequisites
 
 Before installing OAKProxy you must have the appropriate .NET runtime installed. Depending on the build type choose (i.e `net472` or `core22`), [download](https://dotnet.microsoft.com/download) and install the appropriate runtime.
 
-### Kerberos
+## Kerberos
 
 Kerberos access to your service must already be fully functional on your domain. Check the 'Security' Event Log on the server hosting the service you want to proxy for. Look for Event ID 4624 Logon 'Audit success'. If the details for the event look like below, then at least some clients are not authenticating with Kerberos and you may experience authentication failures with OAKProxy. Ensure that your service has an A record in DNS and the corresponding [SPNs](https://docs.microsoft.com/en-us/windows-server/security/group-managed-service-accounts/getting-started-with-group-managed-service-accounts) are configured properly.
 ```
@@ -62,11 +66,11 @@ Detailed Authentication Information:
 	Key Length:		0
 ```
 
-### Service Account
+## Service Account
 
 A user account, MSA, or gMSA must already created and configured to run the OAKProxy service. The service account must be trusted for "any protocol" constrained delegation to any of the backend services you intend to proxy. gMSA is the recommended service account type if your environment supports it.
 
-#### Configure a gMSA for Constrained Delegation
+### Configure a gMSA for Constrained Delegation
 
 Given `oakproxyComputerName` to be the name of the server hosting OAKProxy and `proxiedServiceSpns` to be the SPNs of the services being proxied to, below will create a gMSA to run OAKProxy. This assumes your domain is already [setup for gMSAs](https://docs.microsoft.com/en-us/windows-server/security/group-managed-service-accounts/create-the-key-distribution-services-kds-root-key). In a Highly Available deployment of OAKProxy, `$server` would be set to an AD Group that contains all the computer objects hosting OAKProxy, not a single comptuer object.
 ```PowerShell
@@ -81,7 +85,7 @@ $gmsa | Set-ADAccountControl -TrustedToAuthForDelegation $true
 $gmsa | Set-ADServiceAccount -Add @{'msDS-AllowedToDelegateTo' = $proxiedServiceSpns}
 ```
 
-## Installation
+# Installation
 
 1. Extract the release .zip on a local drive.
 2. Open an administrator PowerShell in the extracted directory.
@@ -91,26 +95,26 @@ $gmsa | Set-ADServiceAccount -Add @{'msDS-AllowedToDelegateTo' = $proxiedService
 5. Configure the service by editing `appsettings.json`.
 6. Run `Install-OAKProxy` to install and start the service.
 
-## Uninstallation
+# Uninstallation
 
 1. Open an administrator PowerShell in the installation directory.
 2. `Import-Module .\OAKProxy.psm1` .
 3. Run `Uninstall-OAKProxy` to stop and delete the service.
 4. Delete installation directory.
 
-## Application Configuration
+# Application Configuration
 
 TODO
 
-### Register Applications in Azure AD
+## Register Applications in Azure AD
 
 TODO
 
-### Configuration File
+## Configuration File
 
 TODO
 
-## Troubleshooting
+# Troubleshooting
 
 You can run OAKProxy as a console application by simply runnings `.\OAKProxy.exe` on the command line from the installation directory.
 
@@ -126,6 +130,6 @@ Detailed Authentication Information:
 ```
 Azure AD Application Proxy also uses Kerberos Constrained Delegation in a simliar fashion to OAKProxy. See [their guide](https://docs.microsoft.com/en-us/azure/active-directory/manage-apps/application-proxy-back-end-kerberos-constrained-delegation-how-to) for additional troubleshooting steps.
 
-## Roadmap
+# Roadmap
 
 Work on a .NET Core version that does not require TCB privilege is in progress. At that the time .NET Framework builds will be deprecated. A Windows Docker image may be available after that.
