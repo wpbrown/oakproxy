@@ -3,6 +3,16 @@ OAKProxy is an OAuth2 to Kerberos gateway. Incoming connections are authorized w
 
 ![img](docs/images/highlevel.svg)
 
+AD domain authentication is often a roadblock when enterprises attempt to start modernizing a legacy system using the [strangler pattern](https://docs.microsoft.com/en-us/azure/architecture/patterns/strangler). The strangler pattern advocates incrementally peeling functionality out of the legacy system in to a new environment. However, legacy and modern authentication do not mix. A service running in Azure with an Azure AD security principal has no trust in the AD domain. OAKProxy is a gateway that allows the AD domain to trust Azure AD identity. With OAKProxy, modern amd legacy authentication can coexist in a single system.
+
+### Features
+
+* A single instance can proxy any number of applications.
+* Stateless. Can be deployed in a highly-available configuration.
+* Translate user identies (token acquired via auth code grant) to domain users.
+* Translate application identities (token acquired via client credential grant) to domain users.
+* Each AD domain application gets a unique identity with roles and scopes in Azure AD.
+
 OAKProxy is for bearer authentication (e.g. REST API calls) only. If you are looking for a browser session aware (OIDC to Kerberos) proxy, see [Azure AD Application Proxy](https://docs.microsoft.com/en-us/azure/active-directory/manage-apps/application-proxy).
 
 ## Security
@@ -20,6 +30,10 @@ Using a gMSA is recommended to limit the potential for abuse of abuse of the pri
 There are 2 build types available: `net472` is dependent on .NET Framework 4.7.2 being installed and `core22` is dependent on the .NET Core 2.2 runtime being installed. Due to limitations in .NET Core, the `core22` build requires the service account to have the 'Act as part of the operating system user right on the server hosting OAKProxy. If this is not permissible in your environment, stick with the `net472` build type.
 
 ## Deployment Scenarios
+
+TODO
+
+### High Availability
 
 TODO
 
