@@ -58,7 +58,9 @@ namespace OAKProxy
                     logging.ClearProviders();
                     if (service)
                     {
-                        logging.AddProvider(new DeferringLoggerProvider(new EventLogLoggerProvider()));
+                        logging.AddProvider(new DeferringLoggerProvider(new EventLogLoggerProvider(new EventLogSettings {
+                            SourceName = "OAKProxy"
+                        })));
                     }
                     else
                     {
