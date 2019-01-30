@@ -141,7 +141,7 @@ Configuration JoinClient
         foreach ($mode in @('SOFTWARE', 'SOFTWARE\WOW6432Node')) {
             foreach ($config in @('Domains', 'EscDomains')) {
                 Registry "LocalZone-$($mode.replace('\','-'))-$config" {
-                    Key = "HKEY_LOCAL_MACHINE\$mode\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap\$config\$DomainName"
+                    Key = "HKEY_LOCAL_MACHINE\$mode\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap\$config\$DomainName\*"
                     ValueName = '*'
                     Force = $true
                     ValueData = '1'
@@ -182,7 +182,7 @@ Configuration JoinProxy
         foreach ($mode in @('SOFTWARE', 'SOFTWARE\WOW6432Node')) {
             foreach ($config in @('Domains', 'EscDomains')) {
                 Registry "LocalZone-$($mode.replace('\','-'))-$config" {
-                    Key = "HKEY_LOCAL_MACHINE\$mode\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap\$config\$DomainName"
+                    Key = "HKEY_LOCAL_MACHINE\$mode\Microsoft\Windows\CurrentVersion\Internet Settings\ZoneMap\$config\$DomainName\*"
                     ValueName = '*'
                     Force = $true
                     ValueData = '1'
@@ -284,6 +284,14 @@ Configuration AppServ
                     Protocol = 'http'
                     Hostname = 'testapp'
                 }
+                MSFT_xWebBindingInformation {
+                    Protocol = 'http'
+                    Hostname = "testappntlm.$DomainName"
+                }
+                MSFT_xWebBindingInformation {
+                    Protocol = 'http'
+                    Hostname = 'testappntlm'
+                }
             )
             DependsOn = '[WindowsFeatureSet]Services', '[Archive]UnpackTestApp'
         }
@@ -304,6 +312,17 @@ Configuration AppServ
 
         xDnsRecord TestAppDnsRecord {
             Name = 'testapp'
+            Zone = $DomainName
+            DnsServer = $DomainName
+            Target = $localIp
+            Type = 'ARecord'
+            Ensure = 'Present'
+            PsDscRunAsCredential = $AdminPassword
+            DependsOn = '[WindowsFeatureSet]Tools'
+        }
+
+        xDnsRecord TestAppDnsRecordNoSPN {
+            Name = 'testappntlm'
             Zone = $DomainName
             DnsServer = $DomainName
             Target = $localIp
