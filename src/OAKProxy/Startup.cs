@@ -12,7 +12,7 @@ namespace OAKProxy
 {
     public class Startup
     {
-        private const string AzureADScopeClaimType = "http://schemas.microsoft.com/identity/claims/scope";
+        private const string AzureADScopeClaimType = "scp";
 
         public Startup(IConfiguration configuration)
         {

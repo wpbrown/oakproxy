@@ -8,6 +8,8 @@ namespace OAKProxy.Proxy
     public class OAKProxyOptions
     {
         public OKProxiedApplication[] ProxiedApplications { get; set; }
+
+        public OKProxySidMatchingOption SidMatching { get; set; }
     }
 
     public class OKProxiedApplication
@@ -15,5 +17,12 @@ namespace OAKProxy.Proxy
         public string Audience { get; set; }
 
         public Uri Destination { get; set; }
+    }
+
+    public enum OKProxySidMatchingOption
+    {
+        Never,
+        First,
+        Only
     }
 }
