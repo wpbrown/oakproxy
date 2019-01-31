@@ -82,6 +82,7 @@ namespace OAKProxy
             else
             {
                 app.UseHttpsRedirection();
+                app.UseStatusCodePages();
             }
 
             // There is no app.UseAuthentication() because authentication will be handled by the IPolicyEvaluator
