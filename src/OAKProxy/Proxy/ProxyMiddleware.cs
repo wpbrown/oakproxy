@@ -1,18 +1,12 @@
-﻿using System;
+﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Extensions;
+using System;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
-using System.Reflection;
 using System.Security.Principal;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Http.Extensions;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
-using OAKProxy.Proxy;
-using ProcessPrivileges;
 
 namespace OAKProxy.Proxy
 {
@@ -41,17 +35,10 @@ namespace OAKProxy.Proxy
         {
             using (var requestMessage = CreateHttpRequestMessageFromIncomingRequest(context.Request, destinationAppUri))
             {
-#if NETFX
-                await ResolveHostInMessage(requestMessage);
-#endif
-                var proc = System.Diagnostics.Process.GetCurrentProcess();
-                await WindowsIdentity.RunImpersonated(domainIdentity.AccessToken, async () =>
+                using (var responseMessage = await httpForwarder.ForwardAsync(requestMessage, domainIdentity, context.RequestAborted))
                 {
-                    using (var responseMessage = await httpForwarder.ForwardAsync(requestMessage, context.RequestAborted))
-                    {
-                        await CopyProxiedMessageToResponseAsync(context.Response, responseMessage, context.RequestAborted);
-                    }
-                });
+                    await CopyProxiedMessageToResponseAsync(context.Response, responseMessage, context.RequestAborted);
+                }
             }
         }
 
