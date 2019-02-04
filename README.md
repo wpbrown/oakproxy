@@ -18,10 +18,12 @@ OAKProxy is for bearer authentication (e.g. REST API calls) only. If you are loo
 * Each AD domain application gets a unique identity with roles and scopes in Azure AD.
 
 # Documentation
-
 - [Documentation](#documentation)
 - [Security](#security)
 	- [Mitigation](#mitigation)
+- [OAuth2](#oauth2)
+	- [User Impersonation](#user-impersonation)
+	- [Service Accounts](#service-accounts)
 - [Identity Translation](#identity-translation)
 	- [Users](#users)
 	- [Applications](#applications)
@@ -52,6 +54,22 @@ Using a gMSA is recommended to limit the potential for abuse of abuse of the pri
 
 The service account requires no special rights (e.g. SeTcbPrivilege, SeImpersonatePrivilege) on the host machine which limits exposure. The service account only has the ability to impersonate to the specific service principals defined in the constrained delegation configuration in AD.
 
+# OAuth2
+
+Each application proxied by OAKProxy is represented by a unique application registration in Azure AD. Client applications consume proxied APIs like any other API protected by modern authentication. There is no indication to the consumer that this is a proxied API.
+
+There is a prototypical app registration for proxied apps. The apps must have exactly one scope defined: `user_impersonation` and one role which applications are eligble for: `app_impersonation`.
+
+TODO graphic: 2 apps, 1 oakproxy, 2 backends, 3 clients (service and web app)
+
+## User Impersonation
+
+An application can acquire a JWT token that will allow it to call a proxied API which in the end reaches the backend as the domain identity of the user represented by the token. This is done via the auth code grant flow. Either the user or an admin of the user's tenant must first consent the `user_impersonation` scope to the application.
+
+## Service Accounts
+
+An application can acquire a JWT token that will allow it to call a proxied API which in the end reaches the backend as the domain identity of an account configured in OAKProxy. This is done via the client credential grant. Either the owner of the API or an admin of the API's tenant must first grant the `app_impersonation` role to the application.
+
 # Identity Translation
 
 There are 2 Azure AD identity types that OAKProxy will translate to domain identities: user principals and application service principals.
@@ -64,7 +82,7 @@ Not all environments use the AD DS UPN to populate the Azure AD UPN (e.g. AD `ma
 
 ## Applications
 
-TODO
+In hybrid environments, AD DS service accounts have no sychronization relationship with Azure AD service principals. In OAKProxy you can establish the relationship by manually mapping Azure AD service principals to AD DS users (or service accounts *TBD*). 
 
 # Deployment Scenarios
 
