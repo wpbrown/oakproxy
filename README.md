@@ -22,7 +22,6 @@ OAKProxy is for bearer authentication (e.g. REST API calls) only. If you are loo
 - [Documentation](#documentation)
 - [Security](#security)
 	- [Mitigation](#mitigation)
-	- [Service Account Rights](#service-account-rights)
 - [Identity Translation](#identity-translation)
 	- [Users](#users)
 	- [Applications](#applications)
@@ -51,9 +50,7 @@ The service account should always be configured for *constrained* delegation. Th
 
 Using a gMSA is recommended to limit the potential for abuse of abuse of the privileged service account. This applies to all privileged service accounts, not just OAKProxy.
 
-## Service Account Rights
-
-There are 2 build types available: `net472` is dependent on .NET Framework 4.7.2 being installed and `core22` is dependent on the .NET Core 2.2 runtime being installed. Due to limitations in .NET Core, the `core22` build requires the service account to have the 'Act as part of the operating system user right on the server hosting OAKProxy. If this is not permissible in your environment, stick with the `net472` build type.
+The service account requires no special rights (e.g. SeTcbPrivilege, SeImpersonatePrivilege) on the host machine which limits exposure. The service account only has the ability to impersonate to the specific service principals defined in the constrained delegation configuration in AD.
 
 # Identity Translation
 
@@ -79,7 +76,7 @@ TODO
 
 # Prerequisites
 
-Before installing OAKProxy you must have the appropriate .NET runtime installed. Depending on the build type choose (i.e `net472` or `core22`), [download](https://dotnet.microsoft.com/download) and install the appropriate runtime.
+The only prerequisites for the software installation are what is [required for .NET Core](https://docs.microsoft.com/en-us/dotnet/core/windows-prerequisites). For Windows Server 2016 or higher this means nothing additional is required.
 
 ## Kerberos
 
@@ -127,9 +124,8 @@ $gmsa | Set-ADServiceAccount -Add @{'msDS-AllowedToDelegateTo' = $proxiedService
 2. Open an administrator PowerShell in the extracted directory.
 3. `Import-Module .\OAKProxy.psm1` .\
    If you get an execution policy error you need to adjust the policy temporarily `Set-ExecutionPolicy Bypass -Scope Process` . 
-4. If you are installing the `core22` build type, you must edit the Local Security Policy on the server and grant the service account the *Act as part of the operating system* User Right.
-5. Configure the service by editing `appsettings.json`.
-6. Run `Install-OAKProxy` to install and start the service.
+4. Configure the service by editing `appsettings.json`.
+5. Run `Install-OAKProxy` to install and start the service.
 
 # Uninstallation
 
