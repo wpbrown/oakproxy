@@ -16,8 +16,9 @@ namespace OAKProxy.Proxy
             Client = client;
         }
 
-        public async Task<HttpResponseMessage> ForwardAsync(HttpRequestMessage requestMessage, CancellationToken token)
+        public async Task<HttpResponseMessage> ForwardAsync(HttpRequestMessage requestMessage, System.Security.Principal.WindowsIdentity domainIdentity, CancellationToken token)
         {
+            requestMessage.Properties.Add("S4uIdentity", domainIdentity);
             return await Client.SendAsync(requestMessage, HttpCompletionOption.ResponseHeadersRead, token);
         }
     }

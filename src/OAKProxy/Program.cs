@@ -12,7 +12,6 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Net.Http;
 
 namespace OAKProxy
 {
@@ -21,6 +20,7 @@ namespace OAKProxy
         public static void Main(string[] args)
         {
             bool isService = args.Contains("-service");
+            bool useTcb = args.Contains("-tcb");
             if (isService)
             {
                 var pathToExe = Process.GetCurrentProcess().MainModule.FileName;
@@ -31,8 +31,7 @@ namespace OAKProxy
             var webHost = CreateWebHostBuilder(isService).Build();
             var logger = webHost.Services.GetRequiredService<ILogger<Program>>();
             var forwarder = webHost.Services.GetRequiredService<HttpForwarder>();
-            ConfigureProcessPrivileges(logger);
-            ActivateAssemblies(logger, forwarder);
+            ConfigureProcessPrivileges(logger, useTcb);
 
             if (isService)
             {
@@ -68,64 +67,60 @@ namespace OAKProxy
                         logging.AddConsole();
                     }
                 })
-                .UseStartup<Startup>()
-#if NETFX
-                .UseSetting(WebHostDefaults.HostingStartupAssembliesKey, "Microsoft.AspNetCore.WebUtilities")
-#endif
-            ;
+                .UseStartup<Startup>();
         }
 
-        private static void ConfigureProcessPrivileges(ILogger logger)
+        private static void ConfigureProcessPrivileges(ILogger logger, bool useTcb)
         {
             var process = Process.GetCurrentProcess();
             var tcbState = process.GetPrivilegeState(Privilege.TrustedComputerBase);
 
-#if NETFX
             if (tcbState != PrivilegeState.Removed)
             {
                 logger.LogWarning("Process is assigned excessive privileges. TrustedComputerBase is not required.");
             }
-#elif COREFX
-            if (tcbState == PrivilegeState.Removed)
+
+            if (useTcb)
             {
-                logger.LogCritical("TrustedComputerBase privilege is required, but not assigned to the process.");
-                throw new SystemException("Required Privilege not held");
-            }
-            else if (tcbState == PrivilegeState.Disabled)
-            {
-                logger.LogInformation("TrustedComputerBase privilege ");
-                try
+                if (tcbState == PrivilegeState.Removed)
                 {
-                    process.EnablePrivilege(Privilege.TrustedComputerBase);
-                    logger.LogInformation("Successfully enabled the TrustedComputerBase privilege.");
+                    logger.LogCritical("TrustedComputerBase privilege was requested, but not assigned to the process.");
+                    throw new SystemException("Requested Privilege not held");
                 }
-                catch (Exception e)
+                else if (tcbState == PrivilegeState.Disabled)
                 {
-                    logger.LogCritical(e, "Failed to enable the TrustedComputerBase privilege.");
-                    throw e;
+                    try
+                    {
+                        process.EnablePrivilege(Privilege.TrustedComputerBase);
+                        logger.LogInformation("Successfully enabled the TrustedComputerBase privilege.");
+                    }
+                    catch (Exception e)
+                    {
+                        logger.LogCritical(e, "Failed to enable the TrustedComputerBase privilege.");
+                        throw e;
+                    }
+                }
+                else
+                {
+                    logger.LogInformation("The requested TrustedComputerBase privilege is already enabled.");
                 }
             }
             else
             {
-                logger.LogInformation("TrustedComputerBase privilege is enabled.");
+                if (tcbState == PrivilegeState.Enabled)
+                {
+                    try
+                    {
+                        process.DisablePrivilege(Privilege.TrustedComputerBase);
+                        logger.LogInformation("Successfully disabled the TrustedComputerBase privilege.");
+                    }
+                    catch (Exception e)
+                    {
+                        logger.LogCritical(e, "Failed to disable the TrustedComputerBase privilege.");
+                        throw e;
+                    }
+                }
             }
-#endif
-        }
-
-        private static void ActivateAssemblies(ILogger logger, HttpForwarder forwarder)
-        {
-            logger.LogInformation("Starting assembly primer request.");
-            // Prime assembly loads to avoid impersonation crash. Simply preloading the assemblies is not sufficient.
-            try
-            {
-                var request = new HttpRequestMessage(HttpMethod.Get, "http://invalid/");
-                var result = forwarder.ForwardAsync(request, new System.Threading.CancellationToken());
-                result.Wait();
-            }
-            catch (Exception)
-            {
-            }
-            logger.LogInformation("Finished assembly primer request.");
         }
     }
 
