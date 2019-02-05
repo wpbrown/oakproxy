@@ -6,6 +6,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using OAKProxy.PolicyEvaluator;
 using OAKProxy.Proxy;
+using System;
 using System.Net.Http;
 
 namespace OAKProxy
@@ -13,6 +14,8 @@ namespace OAKProxy
     public class Startup
     {
         private const string AzureADScopeClaimType = "scp";
+        private const string AzureADRoleClaimType = "roles";
+        private const string AzureADAuthTypeClaimType = "appidacr";
 
         public Startup(IConfiguration configuration)
         {
@@ -37,13 +40,17 @@ namespace OAKProxy
 
         private void ConfigureAuthorization(IServiceCollection services)
         {
-            // Require valid Azure AD bearer token with user_impersonation scope
+            // Require valid Azure AD bearer token with user_impersonation scope or app_impersonation role.
             services.AddAuthorization(options =>
             {
-                options.AddPolicy("AuthenticatedUser",
-                    builder => builder.AddAuthenticationSchemes(AzureADDefaults.BearerAuthenticationScheme)
-                                      .RequireAuthenticatedUser()
-                                      .RequireClaim(AzureADScopeClaimType, "user_impersonation"));
+            options.AddPolicy("AuthenticatedUser",
+                builder => builder.AddAuthenticationSchemes(AzureADDefaults.BearerAuthenticationScheme)
+                                  .RequireAuthenticatedUser()
+                                  .RequireAssertion(context =>
+                                      context.User.HasClaim(AzureADScopeClaimType, "user_impersonation") ||
+                                      (context.User.HasClaim(AzureADRoleClaimType, "app_impersonation") &&
+                                       context.User.HasClaim(c => c.Type == AzureADAuthTypeClaimType && Int32.Parse(c.Value) > 0))
+                                      ));
             });
 
             services.AddAuthorizationPolicyEvaluator();

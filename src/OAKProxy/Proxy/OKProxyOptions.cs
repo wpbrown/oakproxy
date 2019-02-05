@@ -9,6 +9,8 @@ namespace OAKProxy.Proxy
     {
         public OKProxiedApplication[] ProxiedApplications { get; set; }
 
+        public OKProxyServicePrincipalMapping[] ServicePrincipalMappings { get; set; }
+
         public OKProxySidMatchingOption SidMatching { get; set; }
     }
 
@@ -17,6 +19,13 @@ namespace OAKProxy.Proxy
         public string Audience { get; set; }
 
         public Uri Destination { get; set; }
+    }
+
+    public class OKProxyServicePrincipalMapping
+    {
+        public string ObjectId { get; set; }
+
+        public string UserPrincipalName { get; set; }
     }
 
     public enum OKProxySidMatchingOption

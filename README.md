@@ -18,7 +18,7 @@ OAKProxy is for bearer authentication (e.g. REST API calls) only. If you are loo
 * Each AD domain application gets a unique identity with roles and scopes in Azure AD.
 
 # Documentation
-- [Documentation](#documentation)
+
 - [Security](#security)
 	- [Mitigation](#mitigation)
 - [OAuth2](#oauth2)
@@ -82,7 +82,7 @@ Not all environments use the AD DS UPN to populate the Azure AD UPN (e.g. AD `ma
 
 ## Applications
 
-In hybrid environments, AD DS service accounts have no sychronization relationship with Azure AD service principals. In OAKProxy you can establish the relationship by manually mapping Azure AD service principals to AD DS users (or service accounts *TBD*). 
+In hybrid environments, AD DS service accounts have no sychronization relationship with Azure AD service principals. In OAKProxy you can establish the relationship by manually mapping Azure AD service principals to AD DS accounts. In addition to users, the AD DS account can be a gMSA or Computer, but they must be assigned a userPrincipalName. 
 
 # Deployment Scenarios
 

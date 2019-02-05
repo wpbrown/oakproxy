@@ -58,28 +58,37 @@ namespace OAKProxy.Proxy
             return _domainIdentityCache.GetOrCreate(objectId, (entry) => {
                 entry.SlidingExpiration = TimeSpan.FromMinutes(10);
 
-                string upn = user.Claims.First(c => c.Type == "upn").Value;
-                if (_options.SidMatching != OKProxySidMatchingOption.Never)
+                string upn = user.Claims.FirstOrDefault(c => c.Type == "upn")?.Value;
+                if (upn != null)
                 {
-                    var sidClaim = user.Claims.FirstOrDefault(c => c.Type == "onprem_sid");
-                    if (sidClaim != null)
+                    if (_options.SidMatching != OKProxySidMatchingOption.Never)
                     {
-                        using (var principal = UserPrincipal.FindByIdentity(_adContext, IdentityType.Sid, sidClaim.Value))
+                        var sidClaim = user.Claims.FirstOrDefault(c => c.Type == "onprem_sid");
+                        if (sidClaim != null)
                         {
-                            if (principal != null)
+                            using (var principal = UserPrincipal.FindByIdentity(_adContext, IdentityType.Sid, sidClaim.Value))
                             {
-                                upn = principal.UserPrincipalName;
-                            }
-                            else
-                            {
-                                return null;
+                                if (principal != null)
+                                {
+                                    upn = principal.UserPrincipalName;
+                                }
+                                else
+                                {
+                                    return null;
+                                }
                             }
                         }
+                        else if (_options.SidMatching == OKProxySidMatchingOption.Only)
+                        {
+                            return null;
+                        }
                     }
-                    else if (_options.SidMatching == OKProxySidMatchingOption.Only)
-                    {
+                }
+                else
+                {
+                    upn = _options.ServicePrincipalMappings.FirstOrDefault(m => m.ObjectId == objectId)?.UserPrincipalName;
+                    if (upn == null)
                         return null;
-                    }
                 }
 
                 return new WindowsIdentity(upn);
