@@ -20,25 +20,25 @@ OAKProxy is for bearer authentication (e.g. REST API calls) only. If you are loo
 # Documentation
 
 - [Security](#security)
-	- [Mitigation](#mitigation)
+    - [Mitigation](#mitigation)
 - [OAuth2](#oauth2)
-	- [User Impersonation](#user-impersonation)
-	- [Service Accounts](#service-accounts)
+    - [User Impersonation](#user-impersonation)
+    - [Service Accounts](#service-accounts)
 - [Identity Translation](#identity-translation)
-	- [Users](#users)
-	- [Applications](#applications)
+    - [Users](#users)
+    - [Applications](#applications)
 - [Deployment Scenarios](#deployment-scenarios)
-	- [High Availability](#high-availability)
+    - [High Availability](#high-availability)
 - [Prerequisites](#prerequisites)
-	- [Kerberos](#kerberos)
-	- [Service Account](#service-account)
-		- [Configure a gMSA for Constrained Delegation](#configure-a-gmsa-for-constrained-delegation)
+    - [Kerberos](#kerberos)
+    - [Service Account](#service-account)
+        - [Configure a gMSA for Constrained Delegation](#configure-a-gmsa-for-constrained-delegation)
 - [Installation](#installation)
 - [Uninstallation](#uninstallation)
 - [Application Configuration](#application-configuration)
-	- [Register Applications in Azure AD](#register-applications-in-azure-ad)
-		- [Optional Claims for Alternate Logon ID](#optional-claims-for-alternate-logon-id)
-	- [Configuration File](#configuration-file)
+    - [Register Applications in Azure AD](#register-applications-in-azure-ad)
+        - [Optional Claims for Alternate Logon ID](#optional-claims-for-alternate-logon-id)
+    - [Configuration File](#configuration-file)
 - [Troubleshooting](#troubleshooting)
 - [Roadmap](#roadmap)
 
@@ -60,7 +60,7 @@ Each application proxied by OAKProxy is represented by a unique application regi
 
 There is a prototypical app registration for proxied apps. The apps must have exactly one scope defined: `user_impersonation` and one role which applications are eligble for: `app_impersonation`.
 
-TODO graphic: 2 apps, 1 oakproxy, 2 backends, 3 clients (service and web app)
+![img](docs/images/aadrep.svg)
 
 ## User Impersonation
 
@@ -86,11 +86,13 @@ In hybrid environments, AD DS service accounts have no sychronization relationsh
 
 # Deployment Scenarios
 
-TODO
+OAKProxy can be deployed on-premise or in Azure. The server can and should be deployed behind a firewall or application gateway.
+
+The server can be run on an account or host with highly constrained or no outbound internet access. It only communicates outbound to Azure AD metadata endpoints (periodically) and the backends that you configure. If OAKProxy has no outbound intenet access you must provide Azure AD metadata to the application manually via configuration and you are responsible for keeping it up to date.
 
 ## High Availability
 
-TODO
+OAKProxy is a stateless proxy. Any number of instances can be load-balanced.
 
 # Prerequisites
 
@@ -101,20 +103,20 @@ The only prerequisites for the software installation are what is [required for .
 Kerberos access to your service must already be fully functional on your domain. Check the 'Security' Event Log on the server hosting the service you want to proxy for. Look for Event ID 4624 Logon 'Audit success'. If the details for the event look like below, then at least some clients are not authenticating with Kerberos and you may experience authentication failures with OAKProxy. Ensure that your service has an A record in DNS and the corresponding [SPNs](https://docs.microsoft.com/en-us/windows-server/security/group-managed-service-accounts/getting-started-with-group-managed-service-accounts) are configured properly.
 ```
 Detailed Authentication Information:
-	Logon Process:		NtLmSsp 
-	Authentication Package:	NTLM
-	Transited Services:	-
-	Package Name (NTLM only):	NTLM V2
-	Key Length:		128
+    Logon Process:		NtLmSsp 
+    Authentication Package:	NTLM
+    Transited Services:	-
+    Package Name (NTLM only):	NTLM V2
+    Key Length:		128
 ```
 A proper authentication event looks like below:
 ```
 Detailed Authentication Information:
-	Logon Process:		Kerberos
-	Authentication Package:	Kerberos
-	Transited Services:	-
-	Package Name (NTLM only):	-
-	Key Length:		0
+    Logon Process:		Kerberos
+    Authentication Package:	Kerberos
+    Transited Services:	-
+    Package Name (NTLM only):	-
+    Key Length:		0
 ```
 
 ## Service Account
@@ -141,7 +143,7 @@ $gmsa | Set-ADServiceAccount -Add @{'msDS-AllowedToDelegateTo' = $proxiedService
 1. Extract the release .zip on a local drive.
 2. Open an administrator PowerShell in the extracted directory.
 3. `Import-Module .\OAKProxy.psm1` .\
-   If you get an execution policy error you need to adjust the policy temporarily `Set-ExecutionPolicy Bypass -Scope Process` . 
+   If you get an execution policy error you need to adjust temporarily `Set-ExecutionPolicy Bypass -Scope Process` . 
 4. Configure the service by editing `appsettings.json`.
 5. Run `Install-OAKProxy` to install and start the service.
 
@@ -154,17 +156,135 @@ $gmsa | Set-ADServiceAccount -Add @{'msDS-AllowedToDelegateTo' = $proxiedService
 
 # Application Configuration
 
-TODO
+Each application proxied by OAKProxy has a unique application registration in Azure AD.
 
 ## Register Applications in Azure AD
 
-TODO
+Applications can be registered like any API application using the portal ([old](https://docs.microsoft.com/en-us/azure/active-directory/develop/quickstart-v1-add-azure-ad-app), [new](https://docs.microsoft.com/en-us/azure/active-directory/develop/quickstart-register-app)), PowerShell, or the CLI. Whatever method you choose, you must configure:
+1. A `user_impersonation` OAuth2 scope.
+2. An `app_impersonation` application role.
+3. An Application ID URI.
+
+Any further customization is allowed and optional. Below is a PowerShell example to configure a minimal application registration:
+
+```PowerShell
+$role = [Microsoft.Open.AzureAD.Model.AppRole]@{ 
+  AllowedMemberTypes = @("Application"); 
+  Description = "Allow the application to access Contoso HR API as a service account.";
+  DisplayName = "Access Contoso HR API";
+  Value = "app_impersonation";
+  Id = New-Guid;
+  IsEnabled = $true
+}
+
+$app = New-AzureADApplication -DisplayName "Contoso HR API" `
+  -IdentifierUris "http://contoso.com/api/HR" `
+  -AppRoles @($role)
+
+New-AzureADServicePrincipal -AppId $app.AppId
+```
+
+If you use the `New-AzureADApplication` PowerShell command or the _old_ portal UI the default `user_impersonation` scope is created for you. Otherwise you need to add it to the [application manifest](https://docs.microsoft.com/en-us/azure/active-directory/develop/reference-app-manifest) (you must generate a new UUID for the role):
+```json
+"oauth2Permissions": [
+    {
+      "adminConsentDescription": "Allow the application to access Contoso HR API on behalf of the signed-in user.",
+      "adminConsentDisplayName": "Access Contoso HR API",
+      "id": "12345678-1234-1234-1234-123456789012",
+      "isEnabled": true,
+      "type": "User",
+      "userConsentDescription": "Allow the application to access Contoso HR API on your behalf.",
+      "userConsentDisplayName": "Access Contoso HR API",
+      "value": "user_impersonation"
+    }
+  ]
+```
 
 ### Optional Claims for Alternate Logon ID
 
+When you use alternate logon ID, you must enable the on-premise SAM ID claim so OAKProxy can look up on the AD DS user. Add the following section to the [application manifest](https://docs.microsoft.com/en-us/azure/active-directory/develop/reference-app-manifest):
+```json
+"optionalClaims": {
+    "accessToken": [
+      {
+        "name": "onprem_sid",
+        "source": null,
+        "essential": true,
+        "additionalProperties": []
+      }
+    ]
+  }
+```
+
 ## Configuration File
 
-TODO
+All configuration is done with the `appsettings.json` file in the installation directory.
+
+Name | Default | Description
+--- | --- | ---
+**AzureAD.Instance** | *required* | The URL for the Azure cloud (typically `https://login.microsoftonline.com/`).
+**AzureAD.TenantId** | *required*  | The UUID for your Azure AD tenant.
+**OAKProxy.ProxiedApplications** | *required* | An array of ProxiedApplication JSON objects. At least 1 application must be configured.
+OAKProxy.SidMatching | `None` | Users are matched to AD DS users only by UPN by default (`None`). To switch matching on SID, first ensure the optional claim is configured and then set to `Only`. To match on SID if the claim is present and fallback to UPN match otherwise, set to `First`. This is useful for mixed environments where some users are mastered in AD DS and some in Azure AD. When using `First`, if the SID claim is present but no match is found, this is an error, no fallback will occur.
+OAKProxy.ServicePrincipalMappings | *optional* | An array of ServicePrincipalMapping objects. Applications connecting that do not have a mapping specified will be denied access even if they have the app_impersonation role.
+Host.Urls | `http://*` | Specifies the interfaces and ports to listen on. Production deployments must use HTTPS.
+
+
+### ProxiedApplication Object
+
+Name | Default | Description
+--- | --- | ---
+**Audience** | *required* | The identifier URI or "App ID URI" of the application registration in Azure AD.
+**Destination** | *required*  | The URL for the backend application being proxied.
+
+### ServicePrincipalMapping Object
+
+Name | Default | Description
+--- | --- | ---
+**ObjectId** | *required* | The object ID of the Azure AD service principal (_not_ the application object ID or app ID).
+**UserPrincipalName** | *required*  | The AD DS UPN of the user, computer, or service account to impersonate.
+
+### Complete Example
+
+An example `appsetting.json` configured to proxy 2 applications for Contoso corp.
+
+```json
+{
+    "Logging": {
+        "LogLevel": {
+            "Default": "Warning",
+            "OAKProxy": "Information"
+        }
+    },
+    "AzureAD": {
+        "Instance": "https://login.microsoftonline.com/",
+        "TenantId": "84a3c4da-5d91-4223-abb7-2a9e961bb726"
+    },
+    "OAKProxy": {
+        "ProxiedApplications": [
+            {
+                "Audience": "http://contoso.com/api/HR",
+                "Destination": "http://hr.corp.contoso.com/"
+            },
+            {
+                "Audience": "http://contoso.com/api/billing",
+                "Destination": "http://nycbillweb001/"
+            }
+        ],
+        "ServicePrincipalMappings": [
+            {
+                "ObjectId": "b40771c1-d24a-4cf4-92a8-7a7c78ac4ae7",
+                "UserPrincipalName": "xsazrbill@corp.contoso.com"
+            }
+        ],
+        "SidMatching": "None"
+    },
+    "Host": {
+        "Urls": "http://*"
+    },
+    "AllowedHosts": "*"
+}
+```
 
 # Troubleshooting
 
@@ -173,15 +293,15 @@ You can run OAKProxy as a console application by simply runnings `.\OAKProxy.exe
 Check the 'Security' Event Log on the server hosting the service you are proxying to. Look for Event ID 4624 Logon 'Audit success'. A successful connection via OAKProxy will look like below. In this example `xgoakproxy$` is the gMSA running the OAKProxy service.
 ```
 Detailed Authentication Information:
-	Logon Process:		Kerberos
-	Authentication Package:	Kerberos
-	Transited Services:	
-		xgoakproxy$@CORP.CONTOSO.COM
-	Package Name (NTLM only):	-
-	Key Length:		0
+    Logon Process:		Kerberos
+    Authentication Package:	Kerberos
+    Transited Services:	
+        xgoakproxy$@CORP.CONTOSO.COM
+    Package Name (NTLM only):	-
+    Key Length:		0
 ```
 Azure AD Application Proxy also uses Kerberos Constrained Delegation in a simliar fashion to OAKProxy. See [their guide](https://docs.microsoft.com/en-us/azure/active-directory/manage-apps/application-proxy-back-end-kerberos-constrained-delegation-how-to) for additional troubleshooting steps.
 
 # Roadmap
 
-Work on a .NET Core version that does not require TCB privilege is in progress. At that the time .NET Framework builds will be deprecated. A Windows Docker image may be available after that.
+See the [roadmap project](/wpbrown/oakproxy/projects/2). 
