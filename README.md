@@ -148,7 +148,7 @@ $gmsa | Set-ADServiceAccount -Add @{'msDS-AllowedToDelegateTo' = $proxiedService
 3. `Import-Module .\OAKProxy.psm1` .\
    If you get an execution policy error you need to adjust temporarily `Set-ExecutionPolicy Bypass -Scope Process` . 
 4. Configure the service by editing `appsettings.json`.
-5. Run `Install-OAKProxy` to install and start the service.
+5. Run `Install-OAKProxy` and supply the credential that the service will run with. This will install and start the service. If the credential is for a gMSA, leave the password blank.
 
 # Uninstallation
 
@@ -228,7 +228,7 @@ Name | Default | Description
 **AzureAD.Instance** | *required* | The URL for the Azure cloud (typically `https://login.microsoftonline.com/`).
 **AzureAD.TenantId** | *required*  | The UUID for your Azure AD tenant.
 **OAKProxy.ProxiedApplications** | *required* | An array of ProxiedApplication JSON objects. At least 1 application must be configured.
-OAKProxy.SidMatching | `None` | Users are matched to AD DS users only by UPN by default (`None`). To switch matching on SID, first ensure the optional claim is configured and then set to `Only`. To match on SID if the claim is present and fallback to UPN match otherwise, set to `First`. This is useful for mixed environments where some users are mastered in AD DS and some in Azure AD. When using `First`, if the SID claim is present but no match is found, this is an error, no fallback will occur.
+OAKProxy.SidMatching | `Never` | Users are matched to AD DS users only by UPN by default (`Never`). To switch matching on SID, first ensure the optional claim is configured and then set to `Only`. To match on SID if the claim is present and fallback to UPN match otherwise, set to `First`. This is useful for mixed environments where some users are mastered in AD DS and some in Azure AD. When using `First`, if the SID claim is present but no match is found, this is an error, no fallback will occur.
 OAKProxy.ServicePrincipalMappings | *optional* | An array of ServicePrincipalMapping objects. Applications connecting that do not have a mapping specified will be denied access even if they have the app_impersonation role.
 Host.Urls | `http://*` | Specifies the interfaces and ports to listen on. Production deployments must use HTTPS.
 
@@ -291,7 +291,7 @@ An example `appsetting.json` configured to proxy 2 applications for Contoso corp
 
 # Troubleshooting
 
-You can run OAKProxy as a console application by simply runnings `.\OAKProxy.exe` on the command line from the installation directory.
+You can run OAKProxy as a console application by simply runnings `.\OAKProxy.exe` on the command line from the installation directory. When running as a service, logs are written to 'Application' Windows Event Log with the source `OAKProxy`.
 
 Check the 'Security' Event Log on the server hosting the service you are proxying to. Look for Event ID 4624 Logon 'Audit success'. A successful connection via OAKProxy will look like below. In this example `xgoakproxy$` is the gMSA running the OAKProxy service.
 ```
