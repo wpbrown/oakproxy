@@ -2,7 +2,6 @@
 using Microsoft.AspNetCore.Http.Extensions;
 using System;
 using System.Linq;
-using System.Net;
 using System.Net.Http;
 using System.Security.Principal;
 using System.Threading;
@@ -41,18 +40,7 @@ namespace OAKProxy.Proxy
                 }
             }
         }
-
-        private static async Task ResolveHostInMessage(HttpRequestMessage requestMessage)
-        {
-            Uri originalUri = requestMessage.RequestUri;
-            string originalHost = originalUri.Host;
-
-            var builder = new UriBuilder(originalUri);
-            var ip = await Dns.GetHostEntryAsync(originalUri.DnsSafeHost);
-            builder.Host = ip.AddressList.First().ToString();
-            requestMessage.RequestUri = builder.Uri;
-        }
-
+    
         private static HttpRequestMessage CreateHttpRequestMessageFromIncomingRequest(HttpRequest request, Uri destinationAppUri)
         {          
             var requestMessage = new HttpRequestMessage();
@@ -86,7 +74,7 @@ namespace OAKProxy.Proxy
 
         private static async Task CopyProxiedMessageToResponseAsync(HttpResponse response, HttpResponseMessage responseMessage, CancellationToken token)
         {
-            const int StreamCopyBufferSize = 81920;
+            const int StreamCopyBufferSize = 131072;
 
             if (responseMessage == null)
             {
