@@ -24,9 +24,23 @@ namespace OAKProxy.Proxy
             {
                 throw new ArgumentNullException(nameof(context));
             }
+            
+            Uri destinationAppUri = _proxyService.RouteRequest(context.User);
+            if (destinationAppUri is null)
+            {
+                context.Response.StatusCode = 502;
+                context.SetErrorDetail(Errors.Code.NoRoute, "No route for this request");
+                return;
+            }
 
-            Uri destinationAppUri = _proxyService.RouteRequest(context);
             WindowsIdentity domainIdentity = _proxyService.TranslateDomainIdentity(context.User);
+            if (domainIdentity is null)
+            {
+                context.Response.StatusCode = 403;
+                context.SetErrorDetail(Errors.Code.NoIdentityTranslation, "Identity could not be translated to a domain identity");
+                return;
+            }
+            
             await ProxyRequest(context, httpForwarder, domainIdentity, destinationAppUri);
         }
 

@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
@@ -16,8 +17,9 @@ namespace OAKProxy.Proxy
         private readonly Dictionary<string, Uri> _routes;
         private readonly IMemoryCache _domainIdentityCache;
         private readonly PrincipalContext _adContext;
+        private readonly ILogger<ProxyService> _logger;
 
-        public ProxyService(IOptions<OAKProxyOptions> options, IMemoryCache memoryCache)
+        public ProxyService(IOptions<OAKProxyOptions> options, IMemoryCache memoryCache, ILogger<ProxyService> logger)
         {
             if (options == null)
             {
@@ -27,28 +29,28 @@ namespace OAKProxy.Proxy
             _options = options.Value;
             _routes = _options.ProxiedApplications.ToDictionary(x => x.Audience, x => x.Destination);
             _domainIdentityCache = memoryCache;
+            _logger = logger;
 
             if (_options.SidMatching != OKProxySidMatchingOption.Never)
             {
-                _adContext = new PrincipalContext(ContextType.Domain);
+                try
+                {
+                    _adContext = new PrincipalContext(ContextType.Domain);
+                }
+                catch (Exception)
+                {
+                    _logger.LogCritical("Failed to connect to the domain for SID matching.");
+                    throw;
+                }
+                
             }
         }
 
-        internal Uri RouteRequest(HttpContext context)
+        internal Uri RouteRequest(ClaimsPrincipal user)
         {
-            try
-            {
-                var audience = context.User.Claims.First(x => x.Type == "aud").Value;
-                return _routes[audience];
-            }
-            catch (InvalidOperationException e)
-            {
-                throw new InvalidOperationException("Failed to find audience claim.", e);
-            }
-            catch (KeyNotFoundException e)
-            {
-                throw new InvalidOperationException("Route not found for given audience.", e);
-            }
+            var audience = user.Claims.First(x => x.Type == "aud").Value;
+            _routes.TryGetValue(audience, out Uri uri);
+            return uri;
         }
 
         internal WindowsIdentity TranslateDomainIdentity(ClaimsPrincipal user)
@@ -87,20 +89,29 @@ namespace OAKProxy.Proxy
                 else // Application Matching
                 {
                     adUpn = _options.ServicePrincipalMappings.FirstOrDefault(m => m.ObjectId == objectId)?.UserPrincipalName;
+                    if (adUpn is null)
+                        _logger.LogError("Failed to translate application ObjectId '{ObjectId}' to an AD UPN.", objectId);
+                    else
+                        _logger.LogDebug("Translated application ObjectId '{ObjectId}' to AD UPN '{AdUpn}'.", objectId, adUpn);
+                }
+                
+                if (adUpn != null)
+                {
+                    try
+                    {
+                        var identity = new WindowsIdentity(adUpn);
+                        entry.SlidingExpiration = TimeSpan.FromMinutes(10);
+                        return identity;
+                    }
+                    catch (Exception e)
+                    {
+                        _logger.LogError(e, "Translated AD UPN '{AdUpn}', but it failed to logon.", adUpn);
+                    }
                 }
 
-                if (adUpn == null)
-                {
-                    // Retry logon in 1 minute
-                    entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(1);
-                    return null;
-                }
-                else
-                {
-                    // Logon and cache until unused for 10 minutes
-                    entry.SlidingExpiration = TimeSpan.FromMinutes(10);
-                    return new WindowsIdentity(adUpn);
-                }
+                // Retry logon for this objectId in 1 minute
+                entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(1);
+                return null;
             });
         }
     }

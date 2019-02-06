@@ -80,16 +80,14 @@ namespace OAKProxy
 
         public void Configure(IApplicationBuilder app, IHostingEnvironment env, HttpForwarder forwarder)
         {
-            if (env.IsDevelopment())
-            {
-                app.UseDeveloperExceptionPage();
-            }
-            else
+            if (!env.IsDevelopment())
             {
                 app.UseHttpsRedirection();
-                app.UseStatusCodePages();
             }
 
+            app.UseStatusCodePages(Errors.StatusPageAsync);
+            app.UseExceptionHandler(new ExceptionHandlerOptions { ExceptionHandler = Errors.Handle });
+            
             // There is no app.UseAuthentication() because authentication will be handled by the IPolicyEvaluator
             // which is invoked in the PolicyEvaluationMiddleware.
 
