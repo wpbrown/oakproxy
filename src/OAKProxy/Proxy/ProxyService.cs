@@ -56,42 +56,51 @@ namespace OAKProxy.Proxy
             string objectId = user.Claims.First(c => c.Type == "oid").Value;
 
             return _domainIdentityCache.GetOrCreate(objectId, (entry) => {
-                entry.SlidingExpiration = TimeSpan.FromMinutes(10);
+                string cloudUpn = user.Claims.FirstOrDefault(c => c.Type == "upn")?.Value;
+                string adUpn = null;
 
-                string upn = user.Claims.FirstOrDefault(c => c.Type == "upn")?.Value;
-                if (upn != null)
+                if (cloudUpn != null) // User Matching
                 {
-                    if (_options.SidMatching != OKProxySidMatchingOption.Never)
+                    Claim sidClaim = null;
+                    if (_options.SidMatching != OKProxySidMatchingOption.Never) // Sid Matching
                     {
-                        var sidClaim = user.Claims.FirstOrDefault(c => c.Type == "onprem_sid");
+                        sidClaim = user.Claims.FirstOrDefault(c => c.Type == "onprem_sid");
                         if (sidClaim != null)
                         {
                             using (var principal = UserPrincipal.FindByIdentity(_adContext, IdentityType.Sid, sidClaim.Value))
                             {
                                 if (principal != null)
                                 {
-                                    upn = principal.UserPrincipalName;
-                                }
-                                else
-                                {
-                                    return null;
+                                    adUpn = principal.UserPrincipalName;
                                 }
                             }
                         }
-                        else if (_options.SidMatching == OKProxySidMatchingOption.Only)
-                        {
-                            return null;
-                        }
                     }
+                    
+                    bool requireSidMatch = _options.SidMatching == OKProxySidMatchingOption.Only;
+                    bool sidClaimFoundFirst = _options.SidMatching == OKProxySidMatchingOption.First && sidClaim != null;
+                    if (adUpn == null && !requireSidMatch && !sidClaimFoundFirst)
+                    {
+                        adUpn = cloudUpn;
+                    }
+                }
+                else // Application Matching
+                {
+                    adUpn = _options.ServicePrincipalMappings.FirstOrDefault(m => m.ObjectId == objectId)?.UserPrincipalName;
+                }
+
+                if (adUpn == null)
+                {
+                    // Retry logon in 1 minute
+                    entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(1);
+                    return null;
                 }
                 else
                 {
-                    upn = _options.ServicePrincipalMappings.FirstOrDefault(m => m.ObjectId == objectId)?.UserPrincipalName;
-                    if (upn == null)
-                        return null;
+                    // Logon and cache until unused for 10 minutes
+                    entry.SlidingExpiration = TimeSpan.FromMinutes(10);
+                    return new WindowsIdentity(adUpn);
                 }
-
-                return new WindowsIdentity(upn);
             });
         }
     }
