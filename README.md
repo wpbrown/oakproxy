@@ -1,7 +1,7 @@
 ![img](docs/images/title.svg)
 <hr/>
 
-OAKProxy is an OAuth2 to Kerberos gateway. Incoming connections are authorized with JWT bearer tokens. A kerberos token is retrieved for the user identified by the JWT and used to forward the request to a backend. Backend applications require zero modification as the proxied request will look just like one coming from a domain-joined client.
+OAKProxy is an OAuth2 to Kerberos gateway. It allows containerized, PaaS, or otherwise non-domain clients to integrate with legacy domain systems using only HTTPS and Azure AD authentication. Incoming connections are authorized with JWT bearer tokens. A kerberos token is retrieved for the user identified by the JWT and used to forward the request to a backend. Backend applications require zero modification as the proxied request will look just like one coming from a domain-joined client.
 
 ![img](docs/images/highlevel.svg)
 
@@ -89,7 +89,9 @@ In hybrid environments, AD DS service accounts have no sychronization relationsh
 
 # Deployment Scenarios
 
-OAKProxy can be deployed on-premise or in Azure. The server can and should be deployed behind a firewall or application gateway.
+OAKProxy can be deployed on-premise or in Azure. When OAKProxy is deployed on-premise traffic can arrive from Azure via your corpnet (VPN/ER) or directly via the internet through a corporate firewall. If you deploy OAKProxy in an [Azure VDC](https://docs.microsoft.com/en-us/azure/architecture/vdc/), it can act as a bridge between your domain and non-domain network segements entirely in Azure, or direct traffic from non-domain segments back to on-premise backends via VPN/ER. 
+
+The server can and should be deployed behind an on-premise firewall, Azure Application Gateway, Azure API Management, or an NVA if it receives traffic from outside corpnet.
 
 The server can be run on an account or host with highly constrained or no outbound internet access. It only communicates outbound to Azure AD metadata endpoints (periodically) and the backends that you configure. If OAKProxy has no outbound intenet access you must provide Azure AD metadata to the application manually via configuration and you are responsible for keeping it up to date.
 
