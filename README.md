@@ -126,6 +126,8 @@ Detailed Authentication Information:
 
 A user account, MSA, or gMSA must already created and configured to run the OAKProxy service. The service account must be trusted for "any protocol" constrained delegation to any of the backend services you intend to proxy. gMSA is the recommended service account type if your environment supports it.
 
+Ensure the service account has rights to logon as a service on the host server. If OAKProxy is directly serving HTTPS and you are using a cert in the system store, make sure the service account has acccess to the certificate.
+
 ### Configure a gMSA for Constrained Delegation
 
 Given `oakproxyComputerName` to be the name of the server hosting OAKProxy and `proxiedServiceSpns` to be the SPNs of the services being proxied to, below will create a gMSA to run OAKProxy. This assumes your domain is already [setup for gMSAs](https://docs.microsoft.com/en-us/windows-server/security/group-managed-service-accounts/create-the-key-distribution-services-kds-root-key). In a Highly Available deployment of OAKProxy, `$server` would be set to an AD Group that contains all the computer objects hosting OAKProxy, not a single comptuer object.
@@ -230,8 +232,7 @@ Name | Default | Description
 **OAKProxy.ProxiedApplications** | *required* | An array of ProxiedApplication JSON objects. At least 1 application must be configured.
 OAKProxy.SidMatching | `Never` | Users are matched to AD DS users only by UPN by default (`Never`). To switch matching on SID, first ensure the optional claim is configured and then set to `Only`. To match on SID if the claim is present and fallback to UPN match otherwise, set to `First`. This is useful for mixed environments where some users are mastered in AD DS and some in Azure AD. When using `First`, if the SID claim is present but no match is found, this is an error, no fallback will occur.
 OAKProxy.ServicePrincipalMappings | *optional* | An array of ServicePrincipalMapping objects. Applications connecting that do not have a mapping specified will be denied access even if they have the app_impersonation role.
-Host.Urls | `http://*` | Specifies the interfaces and ports to listen on. Production deployments must use HTTPS.
-
+Host.Urls | `http://*` | Specifies the interfaces and ports to listen on. Production deployments should use HTTPS, however, it is not required; HTTPS may be terminated before the OAKProxy server.
 
 ### ProxiedApplication Object
 
@@ -283,9 +284,18 @@ An example `appsetting.json` configured to proxy 2 applications for Contoso corp
         "SidMatching": "None"
     },
     "Host": {
-        "Urls": "http://*"
+        "Urls": "https://*"
     },
-    "AllowedHosts": "*"
+    "AllowedHosts": "*",
+    "Kestrel": {
+        "Certificates": {
+            "Default": {
+                "Subject": "oakproxy.corp.contoso.com",
+                "Store": "My",
+                "Location": "LocalMachine"
+            }
+        }
+    }
 }
 ```
 
