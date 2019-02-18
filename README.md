@@ -38,6 +38,7 @@ OAKProxy is for bearer authentication (e.g. REST API calls) only. If you are loo
 - [Application Configuration](#application-configuration)
   - [Register Applications in Azure AD](#register-applications-in-azure-ad)
     - [Optional Claims for Alternate Logon ID](#optional-claims-for-alternate-logon-id)
+    - [Optional Claims for B2B Users](#optional-claims-for-b2b-users)
   - [Configuration File](#configuration-file)
     - [ProxiedApplication Object](#proxiedapplication-object)
     - [ServicePrincipalMapping Object](#serviceprincipalmapping-object)
@@ -215,9 +216,25 @@ When you use alternate logon ID, you must enable the on-premise SAM ID claim so 
     "accessToken": [
       {
         "name": "onprem_sid",
-        "source": null,
-        "essential": true,
+        "essential": false,
         "additionalProperties": []
+      }
+    ]
+  }
+```
+
+### Optional Claims for B2B Users
+
+The UPN claim is not available by default for B2B users. Add the following section to the [application manifest](https://docs.microsoft.com/en-us/azure/active-directory/develop/reference-app-manifest) so the application receives the B2B external UPN:
+```json
+"optionalClaims": {
+    "accessToken": [
+      {
+        "name": "upn",
+        "essential": true,
+        "additionalProperties": [
+          "include_externally_authenticated_upn"
+        ]
       }
     ]
   }
