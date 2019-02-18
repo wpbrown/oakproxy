@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Web;
+﻿using System.Security.Principal;
 using System.Web.Mvc;
 
 namespace testapp.Controllers
@@ -15,11 +12,15 @@ namespace testapp.Controllers
 
         public ActionResult Api()
         {
-            var data = new {
+            var user = (WindowsIdentity)User.Identity;
+
+            var data = new
+            {
                 Message = "Hello",
-                User.Identity.Name,
-                User.Identity.IsAuthenticated,
-                User.Identity.AuthenticationType
+                user.Name,
+                user.IsAuthenticated,
+                user.AuthenticationType,
+                ImpersonationLevel = user.ImpersonationLevel.ToString()
             };
 
             return Json(data, JsonRequestBehavior.AllowGet);
