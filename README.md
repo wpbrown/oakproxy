@@ -52,7 +52,7 @@ Because the service account that runs OAKProxy is trusted for delegation, the ac
 
 ## Mitigation
 
-The service account should always be configured for *constrained* delegation. This limits OAKProxy's ability to impersonate users only to a list of services maintained by a privileged user such as a Domain Admin.
+The service account should always be configured for *constrained* delegation. This limits OAKProxy's ability to impersonate users only to a list of services maintained by a privileged user such as a Domain Admin or service admins in the case of resource-based constrained delegation.
 
 Using a gMSA is recommended to limit the potential for abuse of abuse of the privileged service account. This applies to all privileged service accounts, not just OAKProxy.
 
