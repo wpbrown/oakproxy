@@ -138,10 +138,11 @@ Given `oakproxyComputerName` to be the name of the server hosting OAKProxy and `
 $oakproxyComputerName = '...'
 $proxiedServiceSpns = @('http/app1','http/app1.corp.contoso.com', '...')
 $server = Get-ADComputer $oakproxyComputerName
-$gmsa = New-ADServiceAccount -Name 'xgoakproxy' ` 
+New-ADServiceAccount -Name 'xgoakproxy' ` 
     -PrincipalsAllowedToRetrieveManagedPassword $server `
     -ServicePrincipalNames 'http/xgoakproxy' `
     -DNSHostName 'xgoakproxy.corp.contoso.com'
+$gmsa = Get-ADServiceAccount -Identity 'xgoakproxy'
 $gmsa | Set-ADAccountControl -TrustedToAuthForDelegation $true
 $gmsa | Set-ADServiceAccount -Add @{'msDS-AllowedToDelegateTo' = $proxiedServiceSpns}
 ```
