@@ -29,6 +29,8 @@ namespace OAKProxy
             ConfigureAuthentication(services);
             ConfigureAuthorization(services);
             ConfigureProxy(services);
+
+            services.AddHealthChecks();
         }
 
         private void ConfigureAuthentication(IServiceCollection services)
@@ -85,6 +87,7 @@ namespace OAKProxy
                 app.UseHttpsRedirection();
             }
 
+            app.UseHealthChecks("/oakproxy_health");
             app.UseStatusCodePages(Errors.StatusPageAsync);
             app.UseExceptionHandler(new ExceptionHandlerOptions { ExceptionHandler = Errors.Handle });
             

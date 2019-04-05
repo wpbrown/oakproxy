@@ -98,7 +98,9 @@ The server can be run on an account or host with highly constrained or no outbou
 
 ## High Availability
 
-OAKProxy is a stateless proxy. Any number of instances can be load-balanced.
+OAKProxy is a stateless proxy. Any number of instances can be load-balanced. 
+
+A load-balancer can evaluate the health by looking for a 200 response from `/oakproxy_health`.
 
 # Prerequisites
 
