@@ -82,11 +82,6 @@ namespace OAKProxy
 
         public void Configure(IApplicationBuilder app, IHostingEnvironment env, HttpForwarder forwarder)
         {
-            if (!env.IsDevelopment())
-            {
-                app.UseHttpsRedirection();
-            }
-
             app.UseHealthChecks("/oakproxy_health");
             app.UseStatusCodePages(Errors.StatusPageAsync);
             app.UseExceptionHandler(new ExceptionHandlerOptions { ExceptionHandler = Errors.Handle });
