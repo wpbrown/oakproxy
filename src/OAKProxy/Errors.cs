@@ -15,7 +15,8 @@ namespace OAKProxy
             Unknown,
             UnhandledException,
             NoRoute,
-            NoIdentityTranslation
+            NoIdentityTranslation,
+            NoAuthorizationClaims
         }
 
         public static readonly MediaTypeHeaderValue ApplicationJson = 
