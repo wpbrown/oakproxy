@@ -36,7 +36,7 @@ namespace OAKProxy
         public static async Task StatusPageAsync(StatusCodeContext context)
         {
             var accept = context.HttpContext.Request.GetTypedHeaders().Accept;
-            bool json = accept.Count == 0 || accept.Any(x => ApplicationJson.IsSubsetOf(x));
+            bool json = accept is null || accept.Count == 0 || accept.Any(x => ApplicationJson.IsSubsetOf(x));
 
             string type, content;
             (Code code, string message) = context.HttpContext.GetErrorDetail();
