@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using Microsoft.ApplicationInsights.DataContracts;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Extensions;
 using System;
 using System.Linq;
@@ -40,7 +41,13 @@ namespace OAKProxy.Proxy
                 context.SetErrorDetail(Errors.Code.NoIdentityTranslation, "Identity could not be translated to a domain identity");
                 return;
             }
-            
+
+            var telemetry = context.Features.Get<RequestTelemetry>();
+            if (telemetry != null)
+            {
+                telemetry.Context.User.AccountId = domainIdentity.Name;
+            }
+
             await ProxyRequest(context, httpForwarder, domainIdentity, destinationAppUri);
         }
 

@@ -67,6 +67,7 @@ namespace OAKProxy
                         logging.AddConsole();
                     }
                 })
+                .UseApplicationInsights()
                 .UseStartup<Startup>();
         }
 

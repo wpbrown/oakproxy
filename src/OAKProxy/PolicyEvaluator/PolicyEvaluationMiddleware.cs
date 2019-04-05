@@ -5,6 +5,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Authorization.Policy;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.ApplicationInsights.DataContracts;
+using System.Linq;
 
 namespace OAKProxy.PolicyEvaluator
 {
@@ -34,6 +36,13 @@ namespace OAKProxy.PolicyEvaluator
             var policyEvaluator = context.RequestServices.GetRequiredService<IPolicyEvaluator>();
             var authenticateResult = await policyEvaluator.AuthenticateAsync(policy, context);
             var authorizeResult = await policyEvaluator.AuthorizeAsync(policy, authenticateResult, context, null);
+
+            var telemetry = context.Features.Get<RequestTelemetry>();
+            if (telemetry != null)
+            {
+                telemetry.Context.User.Id = context.User.Claims.FirstOrDefault(c => c.Type == "upn")?.Value ??
+                                            context.User.Claims.FirstOrDefault(c => c.Type == "oid").Value;
+            }
 
             if (authorizeResult.Challenged)
             {
