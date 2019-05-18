@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using Microsoft.AspNetCore.Authentication.AzureAD.UI;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -27,7 +28,7 @@ namespace OAKProxy.Proxy
             }
 
             _options = options.Value;
-            _routes = _options.ProxiedApplications.ToDictionary(x => x.Audience, x => x.Destination);
+            _routes = _options.ProxiedApplications.ToDictionary(x => x.ClientId, x => x.Destination);
             _domainIdentityCache = memoryCache;
             _logger = logger;
 
@@ -51,6 +52,11 @@ namespace OAKProxy.Proxy
             var audience = user.Claims.First(x => x.Type == "aud").Value;
             _routes.TryGetValue(audience, out Uri uri);
             return uri;
+        }
+
+        internal string GetActiveApplication(string host)
+        {
+            return _options.ProxiedApplications.First(x => x.Host == host).Name;
         }
 
         internal WindowsIdentity TranslateDomainIdentity(ClaimsPrincipal user)

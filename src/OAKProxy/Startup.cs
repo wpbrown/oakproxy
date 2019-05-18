@@ -1,15 +1,23 @@
 ﻿using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.AzureAD.UI;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization.Policy;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.HostFiltering;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 using OAKProxy.PolicyEvaluator;
 using OAKProxy.Proxy;
 using System;
+using System.Collections.Generic;
+using System.IdentityModel.Tokens.Jwt;
+using System.Linq;
 using System.Net.Http;
+using System.Threading.Tasks;
 
 namespace OAKProxy
 {
@@ -24,6 +32,8 @@ namespace OAKProxy
 
         public void ConfigureServices(IServiceCollection services)
         {
+            services.Configure<OAKProxyOptions>(Configuration.GetSection("OAKProxy"));
+
             ConfigureAuthentication(services);
             ConfigureAuthorization(services);
             ConfigureProxy(services);
@@ -33,20 +43,52 @@ namespace OAKProxy
 
         private void ConfigureAuthentication(IServiceCollection services)
         {
-            // Add hanlder for Azure AD bearer authentication for REST requests
-            services.AddAuthentication(AzureADDefaults.BearerAuthenticationScheme)
-                .AddAzureADBearer(options => Configuration.Bind("AzureAD", options));
+            services.AddScoped<IAuthenticationHandlerProvider, FilteredAuthenticationHandlerProvider>();
+
+            var authBuilder = services.AddAuthentication();
+
+            var oakOptions = Configuration.GetSection("OAKProxy").Get<OAKProxyOptions>();
+            foreach (var app in oakOptions.ProxiedApplications)
+            {
+                authBuilder.AddAzureAD(
+                    $"{app.Name}.{AzureADDefaults.AuthenticationScheme}",
+                    $"{app.Name}.{AzureADDefaults.OpenIdScheme}",
+                    $"{app.Name}.{AzureADDefaults.CookieScheme}",
+                    $"{app.Name}.{AzureADDefaults.DisplayName}", 
+                    options => {
+                        Configuration.Bind("AzureAD", options);
+                        options.ClientId = app.ClientId;
+                    });
+            }
+                
+            services.ConfigureAll<OpenIdConnectOptions>(options =>
+            {
+                options.ClaimActions.Remove("aud");
+                options.SecurityTokenValidator = new JwtSecurityTokenHandler
+                {
+                    MapInboundClaims = false
+                };
+            });
         }
 
         private void ConfigureAuthorization(IServiceCollection services)
         {
+            var oakOptions = Configuration.GetSection("OAKProxy").Get<OAKProxyOptions>();
+
             // Require valid Azure AD bearer token with user_impersonation scope or app_impersonation role.
             services.AddAuthorization(options =>
             {
-                options.AddPolicy("AuthenticatedUser",
+                options.AddPolicy("Bearer",
                     builder => builder.AddAuthenticationSchemes(AzureADDefaults.BearerAuthenticationScheme)
-                                      .RequireAuthenticatedUser()
-                                      .AddRequirements(new AuthorizationClaimsRequirement()));
+                                        .RequireAuthenticatedUser()
+                                        .AddRequirements(new AuthorizationClaimsRequirement()));
+
+                foreach (var app in oakOptions.ProxiedApplications)
+                {
+                    options.AddPolicy(app.Host + ".OpenID",
+                        builder => builder.AddAuthenticationSchemes($"{app.Name}.{AzureADDefaults.AuthenticationScheme}")
+                                            .RequireAuthenticatedUser());
+                }
             });
 
             services.Add(ServiceDescriptor.Transient<IPolicyEvaluator, StatusPolicyEvaluator>());
@@ -55,8 +97,22 @@ namespace OAKProxy
 
         private void ConfigureProxy(IServiceCollection services)
         {
-            // Load the oakproxy configuration.
-            services.Configure<OAKProxyOptions>(Configuration.GetSection("OAKProxy"));
+            var oakOptions = Configuration.GetSection("OAKProxy").Get<OAKProxyOptions>();
+            if (oakOptions.BehindReverseProxy)
+            {
+                services.Configure<ForwardedHeadersOptions>(options =>
+                {
+                    options.ForwardedHeaders = ForwardedHeaders.All;
+                    options.ForwardedHostHeaderName = "X-Original-Host";
+                    options.KnownProxies.Clear();
+                    options.KnownNetworks.Clear();
+                });
+            }
+            
+            services.Configure<HostFilteringOptions>(options =>
+            {
+                options.AllowedHosts = oakOptions.ProxiedApplications.Select(x => x.Host).ToArray();
+            });
 
             // Limit bearer authorization based on proxied applications.
             services.ConfigureOptions<JwtBearerConfiguration>();
@@ -75,16 +131,33 @@ namespace OAKProxy
             });
         }
 
-        public void Configure(IApplicationBuilder app, IHostingEnvironment env, HttpForwarder forwarder)
+        public void Configure(IApplicationBuilder app, IHostingEnvironment env, HttpForwarder forwarder, IOptions<OAKProxyOptions> options, ProxyService proxy)
         {
-            app.UseHealthChecks("/oakproxy_health");
+            app.UseHealthChecks("/.oakproxy/health");
+
+            if (options.Value.BehindReverseProxy)
+            {
+                app.UseForwardedHeaders();
+            }
+            app.UseHostFiltering();
             app.UseStatusCodePages(Errors.StatusPageAsync);
             app.UseExceptionHandler(new ExceptionHandlerOptions { ExceptionHandler = Errors.Handle });
-            
-            // There is no app.UseAuthentication() because authentication will be handled by the IPolicyEvaluator
-            // which is invoked in the PolicyEvaluationMiddleware.
+            app.UseAuthentication();
 
-            app.UsePolicyEvaluation(policyName: "AuthenticatedUser");
+            app.UsePolicyEvaluation();
+            app.Use(async (context, next) => {
+                if (context.Request.Path == "/.oakproxy/auth/logout")
+                {
+                    string application = proxy.GetActiveApplication(context.Request.Host.Host);
+
+                    await context.SignOutAsync($"{application}.{AzureADDefaults.CookieScheme}");
+                    await context.SignOutAsync($"{application}.{AzureADDefaults.OpenIdScheme}");
+                }
+                else
+                {
+                    await next.Invoke();
+                }
+            });
             app.RunProxy();
         }
     }

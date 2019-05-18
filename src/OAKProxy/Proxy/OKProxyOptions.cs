@@ -12,11 +12,19 @@ namespace OAKProxy.Proxy
         public OKProxyServicePrincipalMapping[] ServicePrincipalMappings { get; set; }
 
         public OKProxySidMatchingOption SidMatching { get; set; }
+
+        public bool BehindReverseProxy { get; set; }
     }
 
     public class OKProxiedApplication
     {
-        public string Audience { get; set; }
+        public string Name { get; set; }
+
+        public string Host { get; set; }
+
+        public string ClientId { get; set; }
+
+        public string AppdIdUri { get; set; }
 
         public Uri Destination { get; set; }
     }

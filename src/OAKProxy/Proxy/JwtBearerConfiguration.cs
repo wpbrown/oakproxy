@@ -19,7 +19,7 @@ namespace OAKProxy.Proxy
         public void PostConfigure(string name, JwtBearerOptions options)
         {
             options.TokenValidationParameters.ValidAudiences =
-                _proxyOptions.ProxiedApplications.Select(x => x.Audience).ToArray();
+                _proxyOptions.ProxiedApplications.Select(x => x.ClientId).ToArray();
 
             options.SecurityTokenValidators.Clear();
             options.SecurityTokenValidators.Add(new JwtSecurityTokenHandler

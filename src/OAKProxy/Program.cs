@@ -45,20 +45,29 @@ namespace OAKProxy
 
         private static IWebHostBuilder CreateWebHostBuilder(bool service)
         {
-            var config = new ConfigurationBuilder()
+            var hostConfig = new ConfigurationBuilder()
                 .SetBasePath(Directory.GetCurrentDirectory())
                 .AddJsonFile("appsettings.json", optional: true)
                 .AddJsonFile("appsettings.Development.json", optional: true)
                 .Build();
 
-            return WebHost.CreateDefaultBuilder()
-                .UseConfigurationSection(config.GetSection("Host"))
-                .ConfigureLogging(logging =>
+            return new WebHostBuilder()
+                .UseContentRoot(Directory.GetCurrentDirectory())
+                .UseConfigurationSection(hostConfig.GetSection("Host"))
+                .ConfigureAppConfiguration((hostingContext, config) =>
                 {
-                    logging.ClearProviders();
+                    var env = hostingContext.HostingEnvironment;
+
+                    config.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
+                          .AddJsonFile($"appsettings.{env.EnvironmentName}.json", optional: true, reloadOnChange: true);
+                })
+                .ConfigureLogging((hostingContext, logging) =>
+                {
+                    logging.AddConfiguration(hostingContext.Configuration.GetSection("Logging"));
                     if (service)
                     {
-                        logging.AddProvider(new DeferringLoggerProvider(new EventLogLoggerProvider(new EventLogSettings {
+                        logging.AddProvider(new DeferringLoggerProvider(new EventLogLoggerProvider(new EventLogSettings
+                        {
                             SourceName = "OAKProxy"
                         })));
                     }
@@ -66,6 +75,14 @@ namespace OAKProxy
                     {
                         logging.AddConsole();
                     }
+                })
+                .UseDefaultServiceProvider((context, options) =>
+                {
+                    options.ValidateScopes = context.HostingEnvironment.IsDevelopment();
+                })
+                .UseKestrel((builderContext, options) =>
+                {
+                    options.Configure(builderContext.Configuration.GetSection("Kestrel"));
                 })
                 .UseApplicationInsights()
                 .UseStartup<Startup>();
