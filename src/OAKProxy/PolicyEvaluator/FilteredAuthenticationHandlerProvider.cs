@@ -1,28 +1,25 @@
 ﻿using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
 using OAKProxy.Proxy;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 
 namespace OAKProxy.PolicyEvaluator
 {
     public class FilteredAuthenticationHandlerProvider : IAuthenticationHandlerProvider
     {
-        private AuthenticationHandlerProvider _provider;
-        private ProxyService _proxyService;
+        private readonly AuthenticationHandlerProvider _provider;
+        private readonly IProxyApplicationService _applicationService;
 
-        public FilteredAuthenticationHandlerProvider(IAuthenticationSchemeProvider schemes, ProxyService proxyService)
+        public FilteredAuthenticationHandlerProvider(IAuthenticationSchemeProvider schemes, IProxyApplicationService applicationService)
         {
             _provider = new AuthenticationHandlerProvider(schemes);
-            _proxyService = proxyService;
+            _applicationService = applicationService;
         }
 
         public Task<IAuthenticationHandler> GetHandlerAsync(HttpContext context, string authenticationScheme)
         {
-            string application = _proxyService.GetActiveApplication(context.Request.Host.Host);
-            if (!authenticationScheme.StartsWith(application + "."))
+            var activeApplication = _applicationService.GetActiveApplication();
+            if (!ProxyAuthComponents.IsSchemeForApplication(authenticationScheme, activeApplication))
                 return Task.FromResult<IAuthenticationHandler>(null);
 
             return _provider.GetHandlerAsync(context, authenticationScheme);

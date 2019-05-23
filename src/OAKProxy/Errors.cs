@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Net.Http.Headers;
 using System.Linq;
-
+using System.Net;
 using System.Threading.Tasks;
 
 namespace OAKProxy
@@ -16,7 +16,8 @@ namespace OAKProxy
             UnhandledException,
             NoRoute,
             NoIdentityTranslation,
-            NoAuthorizationClaims
+            NoAuthorizationClaims,
+            UnconfiguredPath
         }
 
         public static readonly MediaTypeHeaderValue ApplicationJson = 
@@ -27,7 +28,7 @@ namespace OAKProxy
             var exception = context.Features.Get<IExceptionHandlerFeature>()?.Error;
             if (exception != null)
             {
-                context.Response.StatusCode = 500;
+                context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
                 context.SetErrorDetail(Code.UnhandledException, "Unhandled Exception");
             }
 

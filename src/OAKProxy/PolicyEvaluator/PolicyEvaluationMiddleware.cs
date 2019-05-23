@@ -7,6 +7,8 @@ using Microsoft.AspNetCore.Authorization.Policy;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.ApplicationInsights.DataContracts;
 using System.Linq;
+using OAKProxy.Proxy;
+using System.Net;
 
 namespace OAKProxy.PolicyEvaluator
 {
@@ -21,28 +23,39 @@ namespace OAKProxy.PolicyEvaluator
             _policyProvider = policyProvider;
         }
 
-        public async Task Invoke(HttpContext context)
+        public async Task Invoke(HttpContext context, IProxyApplicationService applicationService, IPolicyEvaluator policyEvaluator)
         {
-            var policyName = context.Request.Host + ".OpenID";
+            var activeApplication = applicationService.GetActiveApplication();
+            var mode = context.Request.PathBase == "/.oakproxy" ? PathAuthOptions.AuthMode.Web :
+                activeApplication.GetPathMode(context.Request.Path);
+            if (!mode.HasValue)
+            {
+                context.Response.StatusCode = (int)HttpStatusCode.Forbidden;
+                context.SetErrorDetail(Errors.Code.UnconfiguredPath, "Path has no authentication method configured.");
+                return;
+            }
+
+            var policyName = mode == PathAuthOptions.AuthMode.Web ?
+                ProxyAuthComponents.GetWebPolicyName(activeApplication) :
+                ProxyAuthComponents.GetApiPolicyName(activeApplication);
             var policy = await _policyProvider.GetPolicyAsync(policyName);
-            var policyEvaluator = context.RequestServices.GetRequiredService<IPolicyEvaluator>();
+
             var authenticateResult = await policyEvaluator.AuthenticateAsync(policy, context);
             var authorizeResult = await policyEvaluator.AuthorizeAsync(policy, authenticateResult, context, null);
 
             var telemetry = context.Features.Get<RequestTelemetry>();
             if (telemetry != null && authenticateResult.Succeeded)
             {
-                telemetry.Context.User.Id = context.User.Claims.FirstOrDefault(c => c.Type == "upn")?.Value ??
-                                            context.User.Claims.FirstOrDefault(c => c.Type == "oid").Value;
+                telemetry.Context.User.Id = context.User.Identity.Name;
             }
 
             if (authorizeResult.Challenged)
             {
-                await context.ChallengeAsync(policy.AuthenticationSchemes.Single());
+                await context.ChallengeAsync(policy.AuthenticationSchemes.First());
             }
             else if (authorizeResult.Forbidden)
             {
-                await context.ForbidAsync(policy.AuthenticationSchemes.Single());
+                await context.ForbidAsync(policy.AuthenticationSchemes.First());
             }
             else
             {

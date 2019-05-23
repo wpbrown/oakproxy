@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.WindowsServices;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -9,6 +10,7 @@ using OAKProxy.Logging;
 using OAKProxy.Proxy;
 using ProcessPrivileges;
 using System;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -19,6 +21,8 @@ namespace OAKProxy
     {
         public static void Main(string[] args)
         {
+            TypeDescriptor.AddAttributes(typeof(HostString), new TypeConverterAttribute(typeof(HostStringTypeConverter)));
+
             bool isService = args.Contains("-service");
             bool useTcb = args.Contains("-tcb");
             if (isService)

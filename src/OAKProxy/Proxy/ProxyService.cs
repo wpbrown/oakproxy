@@ -32,7 +32,7 @@ namespace OAKProxy.Proxy
             _domainIdentityCache = memoryCache;
             _logger = logger;
 
-            if (_options.SidMatching != OKProxySidMatchingOption.Never)
+            if (_options.SidMatching != SidMatchingOption.Never)
             {
                 try
                 {
@@ -56,7 +56,7 @@ namespace OAKProxy.Proxy
 
         internal string GetActiveApplication(string host)
         {
-            return _options.ProxiedApplications.First(x => x.Host == host).Name;
+            return _options.ProxiedApplications.First(x => x.Host == new HostString(host)).Name;
         }
 
         internal WindowsIdentity TranslateDomainIdentity(ClaimsPrincipal user)
@@ -70,7 +70,7 @@ namespace OAKProxy.Proxy
                 if (cloudUpn != null) // User Matching
                 {
                     Claim sidClaim = null;
-                    if (_options.SidMatching != OKProxySidMatchingOption.Never) // Sid Matching
+                    if (_options.SidMatching != SidMatchingOption.Never) // Sid Matching
                     {
                         sidClaim = user.Claims.FirstOrDefault(c => c.Type == "onprem_sid");
                         if (sidClaim != null)
@@ -85,8 +85,8 @@ namespace OAKProxy.Proxy
                         }
                     }
                     
-                    bool requireSidMatch = _options.SidMatching == OKProxySidMatchingOption.Only;
-                    bool sidClaimFoundFirst = _options.SidMatching == OKProxySidMatchingOption.First && sidClaim != null;
+                    bool requireSidMatch = _options.SidMatching == SidMatchingOption.Only;
+                    bool sidClaimFoundFirst = _options.SidMatching == SidMatchingOption.First && sidClaim != null;
                     if (adUpn == null && !requireSidMatch && !sidClaimFoundFirst)
                     {
                         adUpn = cloudUpn;

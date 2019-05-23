@@ -5,20 +5,30 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Infrastructure;
 using Microsoft.AspNetCore.Authorization.Policy;
 using Microsoft.AspNetCore.Http;
+using OAKProxy.Proxy;
 
 namespace OAKProxy.PolicyEvaluator
 {
     public class AuthorizationClaimsRequirement : AssertionRequirement
     {
-        private const string AzureADScopeClaimType = "scp";
-        private const string AzureADRoleClaimType = "roles";
-        private const string AzureADAuthTypeClaimType = "appidacr";
+        public AuthorizationClaimsRequirement(bool webRequireRoleClaim) :
+            base(context => {
+                if (context.User.Identity.AuthenticationType == ProxyAuthComponents.WebAuth)
+                {
+                    return !webRequireRoleClaim || context.User.IsInRole(ProxyAuthComponents.WebUserRole);
+                }
+                
+                if (context.User.Identity.AuthenticationType == ProxyAuthComponents.ApiAuth)
+                {
+                    if (context.User.IsInRole(ProxyAuthComponents.ApiAppRole))
+                    {
+                        return context.User.HasClaim(c => c.Type == AzureADClaims.ApplicationAuthType && Int32.Parse(c.Value) > 0);
+                    }
+                    return context.User.HasClaim(AzureADClaims.Scope, ProxyAuthComponents.ApiUserScope);
+                }
 
-        public AuthorizationClaimsRequirement() :
-            base(context =>
-                context.User.HasClaim(AzureADScopeClaimType, "user_impersonation") ||
-                (context.User.HasClaim(AzureADRoleClaimType, "app_impersonation") &&
-                 context.User.HasClaim(c => c.Type == AzureADAuthTypeClaimType && Int32.Parse(c.Value) > 0)))
+                return false;
+             })
         {
         }
     }

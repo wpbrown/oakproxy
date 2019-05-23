@@ -18,5 +18,15 @@ namespace Microsoft.AspNetCore.Builder
 
             app.UseMiddleware<ProxyMiddleware>();
         }
+
+        public static void RunProxyMeta(this IApplicationBuilder app)
+        {
+            if (app == null)
+            {
+                throw new ArgumentNullException(nameof(app));
+            }
+
+            app.UseMiddleware<ProxyMetaMiddleware>();
+        }
     }
 }
