@@ -44,6 +44,7 @@ namespace OAKProxy
             {
                 services.Configure<ForwardedHeadersOptions>(options =>
                 {
+                    options.ForwardedHeaders = ForwardedHeaders.All;
                     options.KnownNetworks.Clear();
                     options.KnownProxies.Clear();
                     _configuration.GetSection("Configuration:ForwardedHeaders").Bind(options);
@@ -215,7 +216,8 @@ namespace OAKProxy
 
         public void Configure(IApplicationBuilder app)
         {
-            app.UseHealthChecks(ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.Health));
+            if (_options.Server.EnableHealthChecks)
+                app.UseHealthChecks(ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.Health));
             app.UseStatusCodePages(Errors.StatusPageAsync);
             app.UseExceptionHandler(new ExceptionHandlerOptions { ExceptionHandler = Errors.Handle });
             if (_options.Server.UseForwardedHeaders)

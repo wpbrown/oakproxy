@@ -63,6 +63,8 @@ namespace OAKProxy.Proxy
         public string ApplicationInsightsKey { get; set; }
 
         public string Urls { get; set; }
+
+        public bool EnableHealthChecks { get; set; }
     }
 
     public class ProxyApplication
