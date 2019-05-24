@@ -28,17 +28,36 @@ namespace OAKProxy
     public class Startup
     {
         private readonly IConfiguration _configuration;
-        private readonly OAKProxyOptions _options;
+        private readonly ApplicationOptions _options;
 
         public Startup(IConfiguration configuration)
         {
             _configuration = configuration;
-            _options = _configuration.GetSection("OAKProxy").Get<OAKProxyOptions>();
+            _options = _configuration.Get<ApplicationOptions>();
         }
 
         public void ConfigureServices(IServiceCollection services)
         {
-            services.Configure<OAKProxyOptions>(_configuration.GetSection("OAKProxy"));
+            services.Configure<ApplicationOptions>(_configuration);
+
+            if (_options.Server.UseForwardedHeaders)
+            {
+                services.Configure<ForwardedHeadersOptions>(options =>
+                {
+                    options.KnownNetworks.Clear();
+                    options.KnownProxies.Clear();
+                    _configuration.GetSection("Configuration:ForwardedHeaders").Bind(options);
+                });
+            }
+
+            if (!String.IsNullOrWhiteSpace(_options.Server.ApplicationInsightsKey))
+            {
+                services.AddApplicationInsightsTelemetry(options =>
+                {
+                    options.InstrumentationKey = _options.Server.ApplicationInsightsKey;
+                    _configuration.GetSection("Configuration:ApplicationInsights").Bind(options);
+                });
+            }
 
             ConfigureAuthentication(services);
             ConfigureAuthorization(services);
@@ -52,9 +71,10 @@ namespace OAKProxy
             services.AddScoped<IAuthenticationHandlerProvider, FilteredAuthenticationHandlerProvider>();
 
             var authBuilder = services.AddAuthentication();
-            foreach (var application in _options.ProxiedApplications)
+            foreach (var application in _options.Applications)
             {
                 var schemes = ProxyAuthComponents.GetAuthSchemes(application);
+                var idp = _options.IdentityProviders.Single(i => i.Name == application.IdentityProviderBinding.Name);
 
                 if (application.HasPathMode(PathAuthOptions.AuthMode.Api))
                 {
@@ -63,8 +83,9 @@ namespace OAKProxy
                         jwtBearerScheme: schemes.JwtBearerName,
                         configureOptions: options =>
                         {
-                            _configuration.Bind("AzureAD", options);
-                            options.ClientId = application.ClientId;
+                            options.Instance = idp.Instance;
+                            options.TenantId = idp.TenantId;
+                            options.ClientId = application.IdentityProviderBinding.ClientId;
                         });
                 }
 
@@ -77,16 +98,19 @@ namespace OAKProxy
                         displayName: schemes.DisplayName,
                         configureOptions: options =>
                         {
-                            _configuration.Bind("AzureAD", options);
-                            options.ClientId = application.ClientId;
+                            options.Instance = idp.Instance;
+                            options.TenantId = idp.TenantId;
+                            options.ClientId = application.IdentityProviderBinding.ClientId;
+                            options.CallbackPath = ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.SignInCallback);
+                            options.SignedOutCallbackPath = ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.SignedOutCallback);
                         });
                 }
             }
                 
             services.ConfigureAll<JwtBearerOptions>(options =>
             {
-                var application = _options.ProxiedApplications.Single(app => app.ClientId == options.Audience);
-                options.TokenValidationParameters.ValidAudiences = new string[] { application.AppIdUri };
+                var application = _options.Applications.Single(app => app.IdentityProviderBinding.ClientId == options.Audience);
+                options.TokenValidationParameters.ValidAudiences = new string[] { application.IdentityProviderBinding.AppIdUri };
                 options.TokenValidationParameters.AuthenticationType = ProxyAuthComponents.ApiAuth;
                 options.TokenValidationParameters.RoleClaimType = AzureADClaims.Roles;
                 options.TokenValidationParameters.NameClaimTypeRetriever = (token, _) =>
@@ -107,9 +131,12 @@ namespace OAKProxy
             services.ConfigureAll<OpenIdConnectOptions>(options =>
             {
                 options.ClaimActions.Remove("aud");
+                // TODO strip down to whitelist of claims to minimize cookie size
+
                 options.TokenValidationParameters.AuthenticationType = ProxyAuthComponents.WebAuth;
                 options.TokenValidationParameters.RoleClaimType = AzureADClaims.Roles;
                 options.TokenValidationParameters.NameClaimType = AzureADClaims.UserPrincipalName;
+                options.RemoteSignOutPath = ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.RemoteSignOut);
 
                 options.SecurityTokenValidator = new JwtSecurityTokenHandler
                 {
@@ -119,7 +146,8 @@ namespace OAKProxy
 
             services.ConfigureAll<CookieAuthenticationOptions>(options =>
             {
-                options.AccessDeniedPath = "/.oakproxy/accessdenied";
+                options.AccessDeniedPath = ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.AccessDenied);
+                options.Cookie.SameSite = SameSiteMode.Lax; // TODO Make user config per app (using the delegated config feature)
             });
         }
 
@@ -129,15 +157,15 @@ namespace OAKProxy
             services.AddAuthorization(options => CreateAuthorizationPolicies(options, _options));
         }
 
-        private static void CreateAuthorizationPolicies(AuthorizationOptions options, OAKProxyOptions oakOptions)
+        private static void CreateAuthorizationPolicies(AuthorizationOptions authOptions, ApplicationOptions options)
         {
-            foreach (var application in oakOptions.ProxiedApplications)
+            foreach (var application in options.Applications)
             {
                 var schemes = ProxyAuthComponents.GetAuthSchemes(application);
 
                 if (application.HasPathMode(PathAuthOptions.AuthMode.Api))
                 {
-                    options.AddPolicy(ProxyAuthComponents.GetApiPolicyName(application), builder =>
+                    authOptions.AddPolicy(ProxyAuthComponents.GetApiPolicyName(application), builder =>
                     {
                         var apiSchemes = new List<string>() { schemes.ApiName };
                         if (application.ApiAllowWebSession)
@@ -151,7 +179,7 @@ namespace OAKProxy
 
                 if (application.HasPathMode(PathAuthOptions.AuthMode.Web))
                 {
-                    options.AddPolicy(ProxyAuthComponents.GetWebPolicyName(application), builder =>
+                    authOptions.AddPolicy(ProxyAuthComponents.GetWebPolicyName(application), builder =>
                     {
                         builder.AddAuthenticationSchemes(schemes.WebName)
                             .RequireAuthenticatedUser();
@@ -166,21 +194,9 @@ namespace OAKProxy
         private void ConfigureProxy(IServiceCollection services)
         {
             services.AddScoped<IProxyApplicationService, ProxyApplicationService>();
-
-            if (_options.BehindReverseProxy)
-            {
-                services.Configure<ForwardedHeadersOptions>(options =>
-                {
-                    options.ForwardedHeaders = ForwardedHeaders.All;
-                    options.ForwardedHostHeaderName = "X-Original-Host";
-                    options.KnownProxies.Clear();
-                    options.KnownNetworks.Clear();
-                });
-            }
-            
             services.Configure<HostFilteringOptions>(options =>
             {
-                options.AllowedHosts = _options.ProxiedApplications.Select(x => x.Host.Value).ToArray();
+                options.AllowedHosts = _options.Applications.Select(x => x.Host.Value).ToArray();
             });
 
             // Register the proxy service.
@@ -197,30 +213,24 @@ namespace OAKProxy
             });
         }
 
-        public void Configure(IApplicationBuilder app, IOptions<OAKProxyOptions> options)
+        public void Configure(IApplicationBuilder app)
         {
-            app.UseHealthChecks("/.oakproxy/health");
+            app.UseHealthChecks(ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.Health));
             app.UseStatusCodePages(Errors.StatusPageAsync);
             app.UseExceptionHandler(new ExceptionHandlerOptions { ExceptionHandler = Errors.Handle });
-
-            if (options.Value.BehindReverseProxy)
-            {
-                app.UseForwardedHeaders();
-            }
-
+            if (_options.Server.UseForwardedHeaders)
+                app.UseForwardedHeaders();            
             app.UseHostFiltering();
             app.UseAuthentication();
-            app.Map("/.oakproxy", ConfigureMetaPath);
+            app.Map(ProxyMetaEndpoints.PathBase, ConfigureMetaPath);
             app.UsePolicyEvaluation();
             app.RunProxy();
         }
 
-        private static readonly PathString _authenticatedPath = new PathString("/auth");
-
         private void ConfigureMetaPath(IApplicationBuilder app)
         {
             app.UseWhen(
-                context => context.Request.Path.StartsWithSegments(_authenticatedPath), 
+                context => context.Request.Path.StartsWithSegments(ProxyMetaEndpoints.AuthenticatedPathBase), 
                 a => a.UsePolicyEvaluation());
             app.RunProxyMeta();
         }

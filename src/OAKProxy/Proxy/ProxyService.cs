@@ -12,27 +12,25 @@ using System.Security.Principal;
 
 namespace OAKProxy.Proxy
 {
-    public class ProxyService
+    public class KerberosIdentityService
     {
-        private readonly OAKProxyOptions _options;
-        private readonly Dictionary<string, Uri> _routes;
         private readonly IMemoryCache _domainIdentityCache;
         private readonly PrincipalContext _adContext;
-        private readonly ILogger<ProxyService> _logger;
+        private readonly ILogger<KerberosIdentityService> _logger;
 
-        public ProxyService(IOptions<OAKProxyOptions> options, IMemoryCache memoryCache, ILogger<ProxyService> logger)
+        public KerberosIdentityService(IOptions<ApplicationOptions> options, IMemoryCache memoryCache, ILogger<KerberosIdentityService> logger)
         {
             if (options == null)
             {
                 throw new ArgumentNullException(nameof(options));
             }
 
-            _options = options.Value;
-            _routes = _options.ProxiedApplications.ToDictionary(x => x.ClientId, x => x.Destination);
             _domainIdentityCache = memoryCache;
             _logger = logger;
 
-            if (_options.SidMatching != SidMatchingOption.Never)
+            bool hasSidMatching = !options.Value.Authenticators.All(a => a.SidMatching == SidMatchingOption.Never);
+
+            if (hasSidMatching)
             {
                 try
                 {
@@ -47,19 +45,7 @@ namespace OAKProxy.Proxy
             }
         }
 
-        internal Uri RouteRequest(ClaimsPrincipal user)
-        {
-            var audience = user.Claims.First(x => x.Type == "aud").Value;
-            _routes.TryGetValue(audience, out Uri uri);
-            return uri;
-        }
-
-        internal string GetActiveApplication(string host)
-        {
-            return _options.ProxiedApplications.First(x => x.Host == new HostString(host)).Name;
-        }
-
-        internal WindowsIdentity TranslateDomainIdentity(ClaimsPrincipal user)
+        public WindowsIdentity TranslateDomainIdentity(ClaimsPrincipal user, Authenticator options)
         {
             string objectId = user.Claims.First(c => c.Type == "oid").Value;
 
@@ -70,7 +56,7 @@ namespace OAKProxy.Proxy
                 if (cloudUpn != null) // User Matching
                 {
                     Claim sidClaim = null;
-                    if (_options.SidMatching != SidMatchingOption.Never) // Sid Matching
+                    if (options.SidMatching != SidMatchingOption.Never) // Sid Matching
                     {
                         sidClaim = user.Claims.FirstOrDefault(c => c.Type == "onprem_sid");
                         if (sidClaim != null)
@@ -85,8 +71,8 @@ namespace OAKProxy.Proxy
                         }
                     }
                     
-                    bool requireSidMatch = _options.SidMatching == SidMatchingOption.Only;
-                    bool sidClaimFoundFirst = _options.SidMatching == SidMatchingOption.First && sidClaim != null;
+                    bool requireSidMatch = options.SidMatching == SidMatchingOption.Only;
+                    bool sidClaimFoundFirst = options.SidMatching == SidMatchingOption.First && sidClaim != null;
                     if (adUpn == null && !requireSidMatch && !sidClaimFoundFirst)
                     {
                         adUpn = cloudUpn;
@@ -94,7 +80,7 @@ namespace OAKProxy.Proxy
                 }
                 else // Application Matching
                 {
-                    adUpn = _options.ServicePrincipalMappings.FirstOrDefault(m => m.ObjectId == objectId)?.UserPrincipalName;
+                    adUpn = options.ServicePrincipalMappings.FirstOrDefault(m => m.ObjectId == objectId)?.UserPrincipalName;
                     if (adUpn is null)
                         _logger.LogError("Failed to translate application ObjectId '{ObjectId}' to an AD UPN.", objectId);
                     else

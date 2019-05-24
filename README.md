@@ -219,8 +219,7 @@ When you use alternate logon ID, you must enable the on-premise SAM ID claim so 
     "accessToken": [
       {
         "name": "onprem_sid",
-        "essential": false,
-        "additionalProperties": []
+        "essential": false
       }
     ]
   }
@@ -241,6 +240,21 @@ The UPN claim is not available by default for B2B users. Add the following secti
       }
     ]
   }
+```
+
+### Optional Claim for OpenID sessions
+
+Set the logout URL in the app reg and this will allow validation of the signout.
+
+```json
+"optionalClaims": {
+	"idToken": [
+	  {
+		"name": "sid", 
+		"essential": false
+	  }
+	]
+  },
 ```
 
 ## Configuration File

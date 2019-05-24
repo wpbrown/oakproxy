@@ -49,25 +49,41 @@ namespace OAKProxy
 
         private static IWebHostBuilder CreateWebHostBuilder(bool service)
         {
+            // TODO clean up host config setup vs app config
             var hostConfig = new ConfigurationBuilder()
                 .SetBasePath(Directory.GetCurrentDirectory())
                 .AddJsonFile("appsettings.json", optional: true)
                 .AddJsonFile("appsettings.Development.json", optional: true)
+                .AddYamlFile("appsettings.yml", optional: true)
+                .AddYamlFile("appsettings.Development.yml", optional: true)
                 .Build();
 
             return new WebHostBuilder()
+                .UseUrls(hostConfig.GetValue("Server:Urls", "http://*"))
                 .UseContentRoot(Directory.GetCurrentDirectory())
-                .UseConfigurationSection(hostConfig.GetSection("Host"))
+                .UseConfigurationSection(hostConfig.GetSection("Configuration:Host"))
                 .ConfigureAppConfiguration((hostingContext, config) =>
                 {
                     var env = hostingContext.HostingEnvironment;
 
                     config.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
-                          .AddJsonFile($"appsettings.{env.EnvironmentName}.json", optional: true, reloadOnChange: true);
+                          .AddJsonFile($"appsettings.{env.EnvironmentName}.json", optional: true, reloadOnChange: true)
+                          .AddYamlFile("appsettings.yml", optional: true, reloadOnChange: true)
+                          .AddYamlFile($"appsettings.{env.EnvironmentName}.yml", optional: true, reloadOnChange: true);
                 })
                 .ConfigureLogging((hostingContext, logging) =>
                 {
-                    logging.AddConfiguration(hostingContext.Configuration.GetSection("Logging"));
+                    var loggingSection = hostingContext.Configuration.GetSection("Configuration:Logging");
+                    if (loggingSection.Exists())
+                    {
+                        logging.AddConfiguration(loggingSection);
+                    }
+                    else
+                    {
+                        var level = hostingContext.Configuration.GetValue<LogLevel>("Server:LogLevel", LogLevel.Information);
+                        logging.AddFilter(null, level);
+                    }
+                    
                     if (service)
                     {
                         logging.AddProvider(new DeferringLoggerProvider(new EventLogLoggerProvider(new EventLogSettings
@@ -86,9 +102,8 @@ namespace OAKProxy
                 })
                 .UseKestrel((builderContext, options) =>
                 {
-                    options.Configure(builderContext.Configuration.GetSection("Kestrel"));
+                    options.Configure(builderContext.Configuration.GetSection("Configuration:Kestrel"));
                 })
-                .UseApplicationInsights()
                 .UseStartup<Startup>();
         }
 

@@ -12,7 +12,7 @@ namespace OAKProxy.Proxy
                 throw new ArgumentNullException(nameof(services));
             }
 
-            return services.AddSingleton<ProxyService>();
+            return services.AddSingleton<KerberosIdentityService>();
         }
     }
 }

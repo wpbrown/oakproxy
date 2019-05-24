@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -6,24 +7,71 @@ using System.Threading.Tasks;
 
 namespace OAKProxy.Proxy
 {
-    public class OAKProxyOptions
+    public class ApplicationOptions
     {
-        public ProxyApplication[] ProxiedApplications { get; set; }
+        public ServerOptions Server { get; set; }
 
-        public ServicePrincipalMapping[] ServicePrincipalMappings { get; set; }
+        public ProxyApplication[] Applications { get; set; }
+
+        public IdentityProvider[] IdentityProviders { get; set; }
+
+        public Authenticator[] Authenticators { get; set; }
+    }
+
+    public class IdentityProvider
+    {
+        public IdentityProviderType Type { get; set; }
+
+        public string Name { get; set; }
+
+        public string Instance { get; set; } 
+
+        public string TenantId { get; set; }
+    }
+
+    public class Authenticator
+    {
+        public AuthenticatorType Type { get; set; }
+
+        public string Name { get; set; }
 
         public SidMatchingOption SidMatching { get; set; }
 
-        public bool BehindReverseProxy { get; set; }
+        public ServicePrincipalMapping[] ServicePrincipalMappings { get; set; }
     }
 
-    public class ProxyApplication
+    public class IdentityProviderBinding
     {
         public string Name { get; set; }
 
         public string ClientId { get; set; }
 
         public string AppIdUri { get; set; }
+    }
+
+    public class AuthenticatorBinding
+    {
+        public string Name { get; set; }
+    }
+
+    public class ServerOptions
+    {
+        public bool UseForwardedHeaders { get; set; }
+
+        public LogLevel LogLevel { get; set; }
+
+        public string ApplicationInsightsKey { get; set; }
+
+        public string Urls { get; set; }
+    }
+
+    public class ProxyApplication
+    {
+        public string Name { get; set; }
+
+        public IdentityProviderBinding IdentityProviderBinding { get; set; }
+
+        public AuthenticatorBinding[] AuthenticatorBindings { get; set; }
 
         public HostString Host { get; set; }
 
@@ -72,5 +120,15 @@ namespace OAKProxy.Proxy
         Never,
         First,
         Only
+    }
+
+    public enum IdentityProviderType
+    {
+        AzureAD
+    }
+
+    public enum AuthenticatorType
+    {
+        Kerberos
     }
 }

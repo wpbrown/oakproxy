@@ -10,16 +10,16 @@ namespace OAKProxy.Proxy
     public class ProxyApplicationService : IProxyApplicationService
     {
         private readonly ProxyApplication _activeApplication;
-        private readonly OAKProxyOptions _options;
+        private readonly ApplicationOptions _options;
 
-        public ProxyApplicationService(IHttpContextAccessor context, IOptions<OAKProxyOptions> options)
+        public ProxyApplicationService(IHttpContextAccessor context, IOptions<ApplicationOptions> options)
         {
             _options = options.Value;
 
             // Should never fail. Host filtering middleware should short-circuit requests for unknown
             // hosts.
             HostString requestHost = context.HttpContext.Request.Host;
-            _activeApplication = _options.ProxiedApplications.First(app => app.Host == requestHost);
+            _activeApplication = _options.Applications.First(app => app.Host == requestHost);
         }
 
         public ProxyApplication GetActiveApplication()
