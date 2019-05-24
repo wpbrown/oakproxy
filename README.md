@@ -270,6 +270,8 @@ OAKProxy.SidMatching | `Never` | Users are matched to AD DS users only by UPN by
 OAKProxy.ServicePrincipalMappings | *optional* | An array of ServicePrincipalMapping objects. Applications connecting that do not have a mapping specified will be denied access even if they have the app_impersonation role.
 Host.Urls | `http://*` | Specifies the interfaces and ports to listen on. Production deployments should use HTTPS, however, it is not required; HTTPS may be terminated before the OAKProxy server.
 
+`Configuration` section can be used to configure `Host`, `ForwardedHeaders`, `Kestrel`, and `ApplicationInsights`.
+
 ### ProxiedApplication Object
 
 Name | Default | Description
