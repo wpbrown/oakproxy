@@ -9,10 +9,14 @@ steps:
   clean: all
   fetchDepth: 1
 - task: NuGetCommand@2
-  displayName: 'Authenticate with Azure DevOps NuGet'
+  displayName: 'Add Azure DevOps Artifacts Credential'
   inputs:
     command: custom
     arguments: sources update -Name corefx-s4u -Username vsts -Password "$(System.AccessToken)" -StorePasswordInClearText -ConfigFile src/OAKProxy/Nuget.Config
 - script: dotnet publish -c Release -f netcoreapp2.2 -r win10-x64 --self-contained true
   workingDirectory: src/OAKProxy
   displayName: Build
+- task: PublishPipelineArtifact@0
+  inputs:
+    artifactName: oakproxy-win2016
+    targetPath: src/OAKProxy/bin/Release/netcoreapp2.2/win10-x64/publish
