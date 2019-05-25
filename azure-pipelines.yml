@@ -13,5 +13,6 @@ steps:
     artifactName: corefx-s4u
     pipelineId: 17
     targetPath: $(System.DefaultWorkingDirectory)
-- script: dotnet build --configuration Release
+- script: dotnet publish -c Release -f netcoreapp2.2 -r win10-x64 --self-contained true
+  workingDirectory: src/OAKProxy
   displayName: Build
