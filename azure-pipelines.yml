@@ -1,0 +1,17 @@
+trigger:
+- master
+
+pool:
+  vmImage: vs2017-win2016
+
+steps:
+- checkout: self
+  clean: all
+  fetchDepth: 1
+- task: DownloadPipelineArtifact@0
+  inputs:
+    artifactName: corefx-s4u
+    pipelineId: 17
+    targetPath: $(System.DefaultWorkingDirectory)
+- script: dotnet build --configuration Release
+  displayName: Build
