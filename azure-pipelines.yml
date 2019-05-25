@@ -8,10 +8,11 @@ steps:
 - checkout: self
   clean: all
   fetchDepth: 1
-- task: DotNetCoreCLI@2
+- task: NuGetCommand@2
+  displayName: 'Authenticate with Azure DevOps NuGet'
   inputs:
-    command: 'restore'
-    projects: 'src/OAKProxy/*.csproj'
-- script: dotnet publish -c Release -f netcoreapp2.2 -r win10-x64 --self-contained true --no-restore
+    command: custom
+    arguments: sources update -Name corefx-s4u -Username vsts -Password "$(System.AccessToken)" -StorePasswordInClearText -ConfigFile src/OAKProxy/Nuget.Config
+- script: dotnet publish -c Release -f netcoreapp2.2 -r win10-x64 --self-contained true
   workingDirectory: src/OAKProxy
   displayName: Build
