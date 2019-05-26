@@ -13,6 +13,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using OAKProxy.PolicyEvaluator;
 using OAKProxy.Proxy;
 using System;
@@ -114,6 +115,7 @@ namespace OAKProxy
                             options.Instance = idp.Instance;
                             options.TenantId = idp.TenantId;
                             options.ClientId = application.IdentityProviderBinding.ClientId;
+                            options.ClientSecret = application.IdentityProviderBinding.ClientSecret;
                             options.CallbackPath = ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.SignInCallback);
                             options.SignedOutCallbackPath = ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.SignedOutCallback);
                         });
@@ -143,25 +145,25 @@ namespace OAKProxy
                     options.AccessDeniedPath = ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.AccessDenied);
                     options.Cookie.SameSite = application.SessionCookieSameSiteMode ?? SameSiteMode.Lax;
                 });
-            }
-                
-            services.ConfigureAll<OpenIdConnectOptions>(options =>
-            {
-                options.ClaimActions.Remove("aud");
-                options.ClaimActions.DeleteClaims("aio", "family_name", "given_name", "name", "sub", "tid", "unique_name", "uti");
 
-                options.TokenValidationParameters.AuthenticationType = ProxyAuthComponents.WebAuth;
-                options.TokenValidationParameters.RoleClaimType = AzureADClaims.Roles;
-                options.TokenValidationParameters.NameClaimType = AzureADClaims.UserPrincipalName;
-                options.RemoteSignOutPath = ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.RemoteSignOut);
-
-                options.SecurityTokenValidator = new JwtSecurityTokenHandler
+                services.Configure<OpenIdConnectOptions>(schemes.OpenIdName, options =>
                 {
-                    MapInboundClaims = false
-                };
-            });
+                    options.ClaimActions.Remove("aud");
+                    options.ClaimActions.DeleteClaims("aio", "family_name", "given_name", "name", "sub", "tid", "unique_name", "uti");
 
-            
+                    options.TokenValidationParameters.AuthenticationType = ProxyAuthComponents.WebAuth;
+                    options.TokenValidationParameters.RoleClaimType = AzureADClaims.Roles;
+                    options.TokenValidationParameters.NameClaimType = AzureADClaims.UserPrincipalName;
+                    options.RemoteSignOutPath = ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.RemoteSignOut);
+                    options.ResponseType = application.IdentityProviderBinding.DisableImplicitIdToken ? 
+                        OpenIdConnectResponseType.Code : OpenIdConnectResponseType.IdToken;
+
+                    options.SecurityTokenValidator = new JwtSecurityTokenHandler
+                    {
+                        MapInboundClaims = false
+                    };
+                });
+            }
         }
 
         private void ConfigureAuthorization(IServiceCollection services)

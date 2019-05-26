@@ -83,6 +83,10 @@ namespace OAKProxy.Proxy
 
         [Required]
         public string AppIdUri { get; set; }
+
+        public string ClientSecret { get; set; }
+
+        public bool DisableImplicitIdToken { get; set; }
     }
 
     public class AuthenticatorBinding
