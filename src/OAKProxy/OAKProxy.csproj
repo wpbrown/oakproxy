@@ -20,7 +20,7 @@
     <PackageReference Include="Microsoft.AspNetCore.Hosting.WindowsServices" Version="2.2.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.EventLog" Version="2.2.0" />
     <PackageReference Include="System.DirectoryServices.AccountManagement" Version="4.5.0" />
-    <PackageReference Include="Microsoft.Private.CoreFx.NETCoreApp" Version="4.5.220-servicing-27617-0" />
+    <PackageReference Include="Microsoft.Private.CoreFx.NETCoreApp" Version="4.5.220-s4upatch-*" />
   </ItemGroup>
   
   <ItemGroup>
