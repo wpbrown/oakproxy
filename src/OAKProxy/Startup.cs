@@ -118,33 +118,37 @@ namespace OAKProxy
                             options.SignedOutCallbackPath = ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.SignedOutCallback);
                         });
                 }
-            }
-                
-            services.ConfigureAll<JwtBearerOptions>(options =>
-            {
-                var application = _options.Applications.Single(app => app.IdentityProviderBinding.ClientId == options.Audience);
-                options.TokenValidationParameters.ValidAudiences = new string[] { application.IdentityProviderBinding.AppIdUri };
-                options.TokenValidationParameters.AuthenticationType = ProxyAuthComponents.ApiAuth;
-                options.TokenValidationParameters.RoleClaimType = AzureADClaims.Roles;
-                options.TokenValidationParameters.NameClaimTypeRetriever = (token, _) =>
-                {
-                    var jwtToken = (JwtSecurityToken)token;
-                    return jwtToken.Claims.Any(c => c.ValueType == AzureADClaims.UserPrincipalName) ?
-                        AzureADClaims.UserPrincipalName : AzureADClaims.ObjectId;
-                };
 
-                options.SecurityTokenValidators.Clear();
-                options.SecurityTokenValidators.Add(new JwtSecurityTokenHandler
+                services.Configure<JwtBearerOptions>(schemes.JwtBearerName, options =>
                 {
-                    MapInboundClaims = false
+                    options.TokenValidationParameters.ValidAudiences = new string[] { application.IdentityProviderBinding.AppIdUri };
+                    options.TokenValidationParameters.AuthenticationType = ProxyAuthComponents.ApiAuth;
+                    options.TokenValidationParameters.RoleClaimType = AzureADClaims.Roles;
+                    options.TokenValidationParameters.NameClaimTypeRetriever = (token, _) =>
+                    {
+                        var jwtToken = (JwtSecurityToken)token;
+                        return jwtToken.Claims.Any(c => c.ValueType == AzureADClaims.UserPrincipalName) ?
+                            AzureADClaims.UserPrincipalName : AzureADClaims.ObjectId;
+                    };
+
+                    options.SecurityTokenValidators.Clear();
+                    options.SecurityTokenValidators.Add(new JwtSecurityTokenHandler
+                    {
+                        MapInboundClaims = false
+                    });
                 });
 
-            });
-
+                services.Configure<CookieAuthenticationOptions>(schemes.CookieName, options =>
+                {
+                    options.AccessDeniedPath = ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.AccessDenied);
+                    options.Cookie.SameSite = application.SessionCookieSameSiteMode ?? SameSiteMode.Lax;
+                });
+            }
+                
             services.ConfigureAll<OpenIdConnectOptions>(options =>
             {
                 options.ClaimActions.Remove("aud");
-                // TODO strip down to whitelist of claims to minimize cookie size
+                options.ClaimActions.DeleteClaims("aio", "family_name", "given_name", "name", "sub", "tid", "unique_name", "uti");
 
                 options.TokenValidationParameters.AuthenticationType = ProxyAuthComponents.WebAuth;
                 options.TokenValidationParameters.RoleClaimType = AzureADClaims.Roles;
@@ -157,11 +161,7 @@ namespace OAKProxy
                 };
             });
 
-            services.ConfigureAll<CookieAuthenticationOptions>(options =>
-            {
-                options.AccessDeniedPath = ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.AccessDenied);
-                options.Cookie.SameSite = SameSiteMode.Lax; // TODO Make user config per app (using the delegated config feature)
-            });
+            
         }
 
         private void ConfigureAuthorization(IServiceCollection services)

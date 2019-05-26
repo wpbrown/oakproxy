@@ -129,6 +129,8 @@ namespace OAKProxy.Proxy
 
         public bool WebRequireRoleClaim { get; set; }
 
+        public SameSiteMode? SessionCookieSameSiteMode { get; set; }
+
         public PathAuthOptions.AuthMode? GetPathMode(PathString path)
         {
             var options = PathAuthOptions.FirstOrDefault(o => path.StartsWithSegments(o.Path));
