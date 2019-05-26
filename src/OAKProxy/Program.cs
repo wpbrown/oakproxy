@@ -6,6 +6,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.EventLog;
+using Microsoft.Extensions.Options;
 using OAKProxy.Logging;
 using OAKProxy.Proxy;
 using ProcessPrivileges;
@@ -34,7 +35,7 @@ namespace OAKProxy
 
             var webHost = CreateWebHostBuilder(isService).Build();
             var logger = webHost.Services.GetRequiredService<ILogger<Program>>();
-            var forwarder = webHost.Services.GetRequiredService<HttpForwarder>();
+
             ConfigureProcessPrivileges(logger, useTcb);
 
             if (isService)
@@ -53,7 +54,7 @@ namespace OAKProxy
                 .Build();
 
             return new WebHostBuilder()
-                .UseUrls(hostConfig.GetValue("Server:Urls", "http://*"))
+                .UseUrls(hostConfig.GetValue("Server:Urls", "http://*:9000"))
                 .UseContentRoot(Directory.GetCurrentDirectory())
                 .UseConfigurationSection(hostConfig.GetSection("Configuration:Host"))
                 .ConfigureAppConfiguration((hostingContext, config) =>
@@ -94,18 +95,22 @@ namespace OAKProxy
                 {
                     options.Configure(builderContext.Configuration.GetSection("Configuration:Kestrel"));
                 })
+                .ConfigureServices((context, services) => {
+                    services.AddOptions<ApplicationOptions>()
+                        .Bind(context.Configuration)
+                        .ValidateDataAnnotations();
+                    services.AddSingleton<IValidateOptions<ApplicationOptions>, ApplicationOptions>();
+                })
                 .UseStartup<Startup>();
         }
 
         private static IConfigurationBuilder SetupConfiguration(IConfigurationBuilder builder, string environment = null, bool reload = false)
         {
-            builder.AddJsonFile("oakproxy.json", optional: true, reloadOnChange: reload)
-                   .AddYamlFile("oakproxy.yml", optional: true, reloadOnChange: reload);
+            builder.AddYamlFile("oakproxy.yml", optional: true, reloadOnChange: reload);
                    
             if (!String.IsNullOrEmpty(environment))
             {
-                builder.AddJsonFile($"oakproxy.{environment}.json", optional: true, reloadOnChange: reload)
-                       .AddYamlFile($"oakproxy.{environment}.yml", optional: true, reloadOnChange: reload);
+                builder.AddYamlFile($"oakproxy.{environment}.yml", optional: true, reloadOnChange: reload);
             }
 
             return builder;

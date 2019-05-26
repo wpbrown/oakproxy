@@ -19,7 +19,7 @@ namespace OAKProxy.Proxy
             // Should never fail. Host filtering middleware should short-circuit requests for unknown
             // hosts.
             HostString requestHost = context.HttpContext.Request.Host;
-            _activeApplication = _options.Applications.First(app => app.Host == requestHost);
+            _activeApplication = _options.Applications.First(app => app.Host.Value == requestHost);
         }
 
         public ProxyApplication GetActiveApplication()

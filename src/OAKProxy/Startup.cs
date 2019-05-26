@@ -1,5 +1,4 @@
 ﻿using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.AzureAD.UI;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
@@ -12,7 +11,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OAKProxy.PolicyEvaluator;
 using OAKProxy.Proxy;
@@ -21,7 +20,6 @@ using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
 using System.Net.Http;
-using System.Threading.Tasks;
 
 namespace OAKProxy
 {
@@ -30,15 +28,29 @@ namespace OAKProxy
         private readonly IConfiguration _configuration;
         private readonly ApplicationOptions _options;
 
-        public Startup(IConfiguration configuration)
+        public Startup(IConfiguration configuration, IOptions<ApplicationOptions> options, ILogger<Startup> logger)
         {
             _configuration = configuration;
-            _options = _configuration.Get<ApplicationOptions>();
+
+            try
+            {
+                _options = options.Value;
+            }
+            catch (OptionsValidationException e)
+            {
+                foreach (var failure in e.Failures)
+                {
+                    logger.LogCritical(failure);
+                }
+            }
         }
 
         public void ConfigureServices(IServiceCollection services)
         {
-            services.Configure<ApplicationOptions>(_configuration);
+            if (_options is null)
+            {
+                return;
+            }
 
             if (_options.Server.UseForwardedHeaders)
             {
@@ -197,7 +209,7 @@ namespace OAKProxy
             services.AddScoped<IProxyApplicationService, ProxyApplicationService>();
             services.Configure<HostFilteringOptions>(options =>
             {
-                options.AllowedHosts = _options.Applications.Select(x => x.Host.Value).ToArray();
+                options.AllowedHosts = _options.Applications.Select(x => x.Host.Value.Value).ToArray();
             });
 
             // Register the proxy service.
@@ -214,8 +226,14 @@ namespace OAKProxy
             });
         }
 
-        public void Configure(IApplicationBuilder app)
+        public void Configure(IApplicationBuilder app, IApplicationLifetime host)
         {
+            if (_options is null)
+            {
+                host.StopApplication();
+                return;
+            }
+
             if (_options.Server.EnableHealthChecks)
                 app.UseHealthChecks(ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.Health));
             app.UseStatusCodePages(Errors.StatusPageAsync);
