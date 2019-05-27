@@ -1,5 +1,11 @@
 trigger:
-- master
+  batch: false
+  branches:
+    include:
+    - master
+  paths:
+    include:
+    - src/OAKProxy
 
 pool:
   vmImage: vs2017-win2016
