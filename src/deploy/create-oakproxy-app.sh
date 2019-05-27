@@ -23,8 +23,16 @@ roles='[
             "User"
         ],
         "description": "A user can sign in to the application with a transitioned identity.",
-        "displayName": "User Account Impersonation",
+        "displayName": "Web User",
         "value": "user_web"
+    },
+    {
+        "allowedMemberTypes": [
+            "User"
+        ],
+        "description": "A user can use applications to call the API with a transitioned identity.",
+        "displayName": "API User",
+        "value": "user_api"
     }
 ]'
 
