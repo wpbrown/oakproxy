@@ -96,7 +96,7 @@ There are 2 Azure AD identity types that OAKProxy will translate to domain ident
 
 ## Users
 
-In the simplest scenario, the domain is being synchronized to Azure AD by Azure AD Connect. The Azure AD UPN is equivilant to the AD DS UPN. The `upn` claim of the incoming access JWT token will simply be looked up in AD DS.
+In the simplest scenario, the domain is being synchronized to Azure AD by Azure AD Connect. The Azure AD UPN is equivalent to the AD DS UPN. The `upn` claim of the incoming access JWT token will simply be looked up in AD DS.
 
 Not all environments use the AD DS UPN to populate the Azure AD UPN (e.g. AD `mail` attribute is sometimes used for the cloud UPN). This is known as [alternate login ID](https://docs.microsoft.com/en-us/windows-server/identity/ad-fs/operations/configuring-alternate-login-id). In this scenario you must configure [optional claims](#optional-claims-for-alternate-logon-id) for each of your applications. This will cause Azure AD to include the `onprem_sid` claim in the access token. OAKProxy will use this claim to look up the user in AD DS by their SID. 
 
@@ -206,11 +206,13 @@ Updated application.
 Success!
 ```
 
+The application can be used to proxy web-based access, REST API access, or both to the application server. Additional configuration needed for each scenario is described in the following sections.
+
 ### Configure API Access
 
 To access your application as an API with bearer authentication you must configure a meaningful application identifier:
 ```shell
-will@Azure:~$ az ad app update --id 48013783-c898-4b22-a46a-91f0bcf0ff1c --identifier-uris "https://contoso.com/api/hr"
+will@Azure:~$ az ad app update --id 4ca2ea89-3b02-4e05-bfd0-fb44d9bc3868 --identifier-uris "https://contoso.com/api/hr"
 ```
 
 Add the identifier to the OAKProxy application configuration:
@@ -225,9 +227,14 @@ Applications:
 
 ### Configure Web Access
 
-* add homepage 
-* add reply url
-* add logout url
+To access your application as a web application you must configure the homepage, callback, and remote logout URLs in the application registration. The hostname used should be consistent with the hostname configured for the application in OAKProxy. The reply and logout URLs are always at `/.oakproxy/login` and `/.oakproxy/logout` on the configured application host.
+
+```shell
+will@Azure:~$ az ad app update --id 4ca2ea89-3b02-4e05-bfd0-fb44d9bc3868 \
+  --homepage "https://hr.contoso.com" \
+  --reply-urls "https://hr.contoso.com/.oakproxy/login" \
+  --set "logoutUrl=https://hr.contoso.com/.oakproxy/logout"
+```
 
 #### Require User Assignment
 
