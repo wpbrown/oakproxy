@@ -238,7 +238,7 @@ will@Azure:~$ az ad app update --id 4ca2ea89-3b02-4e05-bfd0-fb44d9bc3868 \
 
 #### Require User Assignment
 
-By default, any user who logs in to the application via the web will be allowed and OAKProxy will attempt to transition their identity to the backend. OAKProxy can be configured to perform authorization for web users.
+By default, any valid user of your tenant who logs in to the application via the web will be allowed and OAKProxy will attempt to transition their identity to the backend. OAKProxy can be configured to perform authorization for web users.
 
 Add the `WebRequireRoleClaim` to the application:
 ```yaml
@@ -337,7 +337,7 @@ The UPN claim is not available by default for B2B users. Add the following secti
 
 ### Optional Claim for OpenID sessions
 
-Set the logout URL in the app reg and this will allow validation of the signout.
+The session ID claim is required for the proxy to validate remote logout attempts are legitimate. Currently this also requires a `None` same site policy so remote sign out requests sends the session cookie. This is a limitation of Azure AD.
 
 ```json
 "optionalClaims": {
@@ -352,34 +352,100 @@ Set the logout URL in the app reg and this will allow validation of the signout.
 
 # OAKProxy Configuration
 
-All configuration is done with the `appsettings.json` file in the installation directory.
+All configuration is done with an `oakproxy.yml` file in the installation directory.
+
+## Configuration File Schema
 
 Name | Default | Description
 --- | --- | ---
-**AzureAD.Instance** | *required* | The URL for the Azure cloud (typically `https://login.microsoftonline.com/`).
-**AzureAD.TenantId** | *required*  | The UUID for your Azure AD tenant.
-**OAKProxy.ProxiedApplications** | *required* | An array of ProxiedApplication JSON objects. At least 1 application must be configured.
-OAKProxy.SidMatching | `Never` | Users are matched to AD DS users only by UPN by default (`Never`). To switch matching on SID, first ensure the optional claim is configured and then set to `Only`. To match on SID if the claim is present and fallback to UPN match otherwise, set to `First`. This is useful for mixed environments where some users are mastered in AD DS and some in Azure AD. When using `First`, if the SID claim is present but no match is found, this is an error, no fallback will occur.
-OAKProxy.ServicePrincipalMappings | *optional* | An array of ServicePrincipalMapping objects. Applications connecting that do not have a mapping specified will be denied access even if they have the app_impersonation role.
-Host.Urls | `http://*` | Specifies the interfaces and ports to listen on. Production deployments should use HTTPS, however, it is not required; HTTPS may be terminated before the OAKProxy server.
+**Server** | *required* | A single server object.
+**IdentityProviders** | *required* | An array of at least one identity provider object.
+**Authenticators** | *required* |  An array of at least one authenticator object.
+**Applications** | *required* |  An array of at least one application.
+Configuration | *optional* | Configuration of ASP.NET Core subsystems.
 
-`Configuration` section can be used to configure `Host`, `ForwardedHeaders`, `Kestrel`, and `ApplicationInsights`.
-
-### ProxiedApplication Object
+### Server Object
 
 Name | Default | Description
 --- | --- | ---
-**Audience** | *required* | The identifier URI or "App ID URI" of the application registration in Azure AD.
-**Destination** | *required*  | The URL for the backend application being proxied.
+**Urls** | *required* | Specifies the scheme, interfaces, and ports to listen on. Production deployments of OAKProxy must use HTTPS, however, it is may be terminated before the OAKProxy server. Example: `http://*` listens on all intefaces on port 80. [More information](https://docs.microsoft.com/en-us/aspnet/core/fundamentals/host/web-host?view=aspnetcore-2.2#server-urls).
+UseForwardedHeaders | `false` | Use scheme, host, and port headers forwarded by a reverse proxy. [More information](https://docs.microsoft.com/en-us/aspnet/core/host-and-deploy/proxy-load-balancer?view=aspnetcore-2.2).
+LogLevel | `Information` | Log verbosity. [Valid values](https://docs.microsoft.com/en-us/aspnet/core/fundamentals/logging/?view=aspnetcore-2.2#log-level).
+ApplicationInsightsKey | *optional* | If provided, OAKProxy will feed information to [Azure Application Insights](https://docs.microsoft.com/en-us/azure/azure-monitor/app/app-insights-overview).
+EnableHealthChecks | `false` | Listen at `/.oakproxy/health` for health probes from gateways/load-balancers.
 
-### ServicePrincipalMapping Object
+### Azure AD Identity Provider Object
+
+Name | Default | Description
+--- | --- | ---
+**Type** | *required* | Must be `AzureAD`.
+**Name** | *required* | An alphanumeric  name for the object.
+**Instance** | *required* | The URL for the Azure cloud (typically `https://login.microsoftonline.com/`).
+**TenantId** | *required*  | The UUID for your Azure AD tenant.
+
+### Kerberos Authenticator Object
+
+Name | Default | Description
+--- | --- | ---
+**Type** | *required* | Must be `Kerberos`.
+**Name** | *required* | An alphanumeric  name for the object.
+ServicePrincipalMappings | *optional* | An array of service principal mapping objects. Applications connecting that do not have a mapping specified will be denied access even if they have the app_impersonation role.
+SidMatching | `Never` | Users are matched to AD DS users only by UPN by default (`Never`). To only match on SID, first ensure the optional claim is configured and then set SidMatching to `Only`. To match on SID if the claim is present and fallback to UPN match otherwise, set to `First`. This is useful for mixed environments where some users are mastered in AD DS and some in Azure AD. When using `First`, if the SID claim is present but no match is found, this is an error, no fallback to UPN will occur.
+
+### Service Principal Mapping Object
 
 Name | Default | Description
 --- | --- | ---
 **ObjectId** | *required* | The object ID of the Azure AD service principal (_not_ the application object ID or app ID).
 **UserPrincipalName** | *required*  | The AD DS UPN of the user, computer, or service account to impersonate.
 
-### Complete Example
+### Application Object
+
+Name | Default | Description
+--- | --- | ---
+**Name** | *required* | An alphanumeric  name for the object.
+**IdentityProviderBinding** | *required* | A single identity provider binding object.
+**AuthenticatorBindings** | *required* | At least one authenticator binding object.
+**Host** | *required* | The frontend host name of the application. Example: `hr.contoso.com`.
+**Destination** | *required* | The URL for the backend application being proxied. Example: `http://hr.corp.contoso.com/`.
+**PathAuthOptions** | *required* | At least one path authentication option object.
+ApiAllowWebSession | `false` | For paths configured for `Api` authentication, allow them to also accept a valid pre-established OpenID Connect web session instead of a JWT bearer token. This is useful for supporting legacy applications that make authenticated AJAX calls from their web application.
+WebRequireRoleClaim | `false` | Require the user who logs directly in the application via the web to have the `user_web` role in their token. See [Require User Assignment](#require-user-assignment) for more information.
+SessionCookieSameSiteMode | `Lax` | The SameSite mode to use for the OpenID Connect session cookie. See "Cookie.SameSite" under "AddCookie Options" [here](https://docs.microsoft.com/en-us/aspnet/core/security/authentication/cookie?view=aspnetcore-2.2#configuration) for more information.
+
+### Path Authentication Option Object
+
+Name | Default | Description
+--- | --- | ---
+**Path** | *required* | The path within the application. Example: `/api`.
+**Mode** | *required* | The authentication mode to accept: `Web` (OpenID Connect) or `API` (JWT Bearer).
+
+### Azure AD Identity Provider Binding Object
+
+Name | Default | Description
+--- | --- | ---
+**Name** | *required* | The name of an Azure AD identity provider object.
+**ClientId** | *required* | The application ID.
+AppIdUri | *optional* | The identifier URI or "App ID URI" of the application registration in Azure AD. Required if any paths on the application are configured with `Mode: Api`.
+ClientSecret | *optional* | Client secret. Required if `DisableImplicitIdToken` is `true`.
+DisableImplicitIdToken | `false` | Use auth code grant to retrieve an id_token during OpenID Connect authentication. The default behavior is to use an implicit id_token response.
+
+### Kerberos Authenticator Binding Object
+
+Name | Default | Description
+--- | --- | ---
+**Name** | *required* | The name of a Kerberos authenticator object.
+
+### Subsystem Configuration
+
+Name | Default | Description
+--- | --- | ---
+Host | *optional* | Configure [WebHost](https://docs.microsoft.com/en-us/aspnet/core/fundamentals/host/web-host?view=aspnetcore-2.2#host-configuration-values) settings.
+ForwardedHeaders | *optional* | Configure [forwarded headers](https://docs.microsoft.com/en-us/aspnet/core/host-and-deploy/proxy-load-balancer?view=aspnetcore-2.2#forwarded-headers-middleware-options) middleware.
+Kestrel | *optional* | Configure [Kestrel](https://docs.microsoft.com/en-us/aspnet/core/fundamentals/servers/kestrel?view=aspnetcore-2.2#endpoint-configuration) settings.
+ApplicationInsights | *optional* | Configure [Application Insights](https://docs.microsoft.com/en-us/azure/azure-monitor/app/asp-net-core#configuring-using-applicationinsightsserviceoptions) middleware.
+
+## Example Configuration
 
 This is an example `oakproxy.yml` configured to proxy 2 applications for Contoso corp. The HR application requires JWT bearer authentication to all paths under `/api` and requires an OpenID Connect authenticated session for all other paths. The billing application has no API and only allows OpenID Connect authentication. The billing application requires the users be assign the `Web User` role in the Azure AD enterprise application configuration.
 
@@ -439,6 +505,22 @@ Configuration:
   ForwardedHeaders:
     ForwardedHostHeaderName: X-Original-Host
 ```
+
+### HTTPS
+
+It's recommended that HTTPS be terminated by a gateway. If OAKProxy is directly receiving HTTPS traffic you must configure a certificate in [Kestrel](https://docs.microsoft.com/en-us/aspnet/core/fundamentals/servers/kestrel?view=aspnetcore-2.2#endpoint-configuration). Below is an example of one default certificate for all host names stored the Computer certificate store:
+
+```yaml
+Configuration:
+  Kestrel:
+    Certificates:
+      Default:
+        Subject: 'hr.contoso.com'
+        Store: My
+        Location: LocalMachine
+```
+
+SNI is not currently supported.
 
 # Troubleshooting
 
