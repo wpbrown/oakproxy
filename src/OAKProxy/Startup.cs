@@ -1,29 +1,78 @@
 ﻿using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.AzureAD.UI;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Policy;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.HostFiltering;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using OAKProxy.PolicyEvaluator;
 using OAKProxy.Proxy;
 using System;
+using System.Collections.Generic;
+using System.IdentityModel.Tokens.Jwt;
+using System.Linq;
 using System.Net.Http;
 
 namespace OAKProxy
 {
     public class Startup
     {
-        public Startup(IConfiguration configuration)
-        {
-            Configuration = configuration;
-        }
+        private readonly IConfiguration _configuration;
+        private readonly ApplicationOptions _options;
 
-        private IConfiguration Configuration { get; }
+        public Startup(IConfiguration configuration, IOptions<ApplicationOptions> options, ILogger<Startup> logger)
+        {
+            _configuration = configuration;
+
+            try
+            {
+                _options = options.Value;
+            }
+            catch (OptionsValidationException e)
+            {
+                foreach (var failure in e.Failures)
+                {
+                    logger.LogCritical(failure);
+                }
+            }
+        }
 
         public void ConfigureServices(IServiceCollection services)
         {
+            if (_options is null)
+            {
+                return;
+            }
+
+            if (_options.Server.UseForwardedHeaders)
+            {
+                services.Configure<ForwardedHeadersOptions>(options =>
+                {
+                    options.ForwardedHeaders = ForwardedHeaders.All;
+                    options.KnownNetworks.Clear();
+                    options.KnownProxies.Clear();
+                    _configuration.GetSection("Configuration:ForwardedHeaders").Bind(options);
+                });
+            }
+
+            if (!String.IsNullOrWhiteSpace(_options.Server.ApplicationInsightsKey))
+            {
+                services.AddApplicationInsightsTelemetry(options =>
+                {
+                    options.InstrumentationKey = _options.Server.ApplicationInsightsKey;
+                    _configuration.GetSection("Configuration:ApplicationInsights").Bind(options);
+                });
+            }
+
             ConfigureAuthentication(services);
             ConfigureAuthorization(services);
             ConfigureProxy(services);
@@ -33,33 +82,137 @@ namespace OAKProxy
 
         private void ConfigureAuthentication(IServiceCollection services)
         {
-            // Add hanlder for Azure AD bearer authentication for REST requests
-            services.AddAuthentication(AzureADDefaults.BearerAuthenticationScheme)
-                .AddAzureADBearer(options => Configuration.Bind("AzureAD", options));
+            services.AddScoped<IAuthenticationHandlerProvider, FilteredAuthenticationHandlerProvider>();
+
+            var authBuilder = services.AddAuthentication();
+            foreach (var application in _options.Applications)
+            {
+                var schemes = ProxyAuthComponents.GetAuthSchemes(application);
+                var idp = _options.IdentityProviders.Single(i => i.Name == application.IdentityProviderBinding.Name);
+
+                if (application.HasPathMode(PathAuthOptions.AuthMode.Api))
+                {
+                    authBuilder.AddAzureADBearer(
+                        scheme: schemes.ApiName,
+                        jwtBearerScheme: schemes.JwtBearerName,
+                        configureOptions: options =>
+                        {
+                            options.Instance = idp.Instance;
+                            options.TenantId = idp.TenantId;
+                            options.ClientId = application.IdentityProviderBinding.ClientId;
+                        });
+                }
+
+                if (application.HasPathMode(PathAuthOptions.AuthMode.Web))
+                {
+                    authBuilder.AddAzureAD(
+                        scheme: schemes.WebName,
+                        openIdConnectScheme: schemes.OpenIdName,
+                        cookieScheme: schemes.CookieName,
+                        displayName: schemes.DisplayName,
+                        configureOptions: options =>
+                        {
+                            options.Instance = idp.Instance;
+                            options.TenantId = idp.TenantId;
+                            options.ClientId = application.IdentityProviderBinding.ClientId;
+                            options.ClientSecret = application.IdentityProviderBinding.ClientSecret;
+                            options.CallbackPath = ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.SignInCallback);
+                            options.SignedOutCallbackPath = ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.SignedOutCallback);
+                        });
+                }
+
+                services.Configure<JwtBearerOptions>(schemes.JwtBearerName, options =>
+                {
+                    options.TokenValidationParameters.ValidAudiences = new string[] { application.IdentityProviderBinding.AppIdUri };
+                    options.TokenValidationParameters.AuthenticationType = ProxyAuthComponents.ApiAuth;
+                    options.TokenValidationParameters.RoleClaimType = AzureADClaims.Roles;
+                    options.TokenValidationParameters.NameClaimTypeRetriever = (token, _) =>
+                    {
+                        var jwtToken = (JwtSecurityToken)token;
+                        return jwtToken.Claims.Any(c => c.ValueType == AzureADClaims.UserPrincipalName) ?
+                            AzureADClaims.UserPrincipalName : AzureADClaims.ObjectId;
+                    };
+
+                    options.SecurityTokenValidators.Clear();
+                    options.SecurityTokenValidators.Add(new JwtSecurityTokenHandler
+                    {
+                        MapInboundClaims = false
+                    });
+                });
+
+                services.Configure<CookieAuthenticationOptions>(schemes.CookieName, options =>
+                {
+                    options.AccessDeniedPath = ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.AccessDenied);
+                    options.Cookie.SameSite = application.SessionCookieSameSiteMode ?? SameSiteMode.Lax;
+                });
+
+                services.Configure<OpenIdConnectOptions>(schemes.OpenIdName, options =>
+                {
+                    options.ClaimActions.Remove("aud");
+                    options.ClaimActions.DeleteClaims("aio", "family_name", "given_name", "name", "sub", "tid", "unique_name", "uti");
+
+                    options.TokenValidationParameters.AuthenticationType = ProxyAuthComponents.WebAuth;
+                    options.TokenValidationParameters.RoleClaimType = AzureADClaims.Roles;
+                    options.TokenValidationParameters.NameClaimType = AzureADClaims.UserPrincipalName;
+                    options.RemoteSignOutPath = ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.RemoteSignOut);
+                    options.ResponseType = application.IdentityProviderBinding.DisableImplicitIdToken ? 
+                        OpenIdConnectResponseType.Code : OpenIdConnectResponseType.IdToken;
+
+                    options.SecurityTokenValidator = new JwtSecurityTokenHandler
+                    {
+                        MapInboundClaims = false
+                    };
+                });
+            }
         }
 
         private void ConfigureAuthorization(IServiceCollection services)
         {
-            // Require valid Azure AD bearer token with user_impersonation scope or app_impersonation role.
-            services.AddAuthorization(options =>
-            {
-                options.AddPolicy("AuthenticatedUser",
-                    builder => builder.AddAuthenticationSchemes(AzureADDefaults.BearerAuthenticationScheme)
-                                      .RequireAuthenticatedUser()
-                                      .AddRequirements(new AuthorizationClaimsRequirement()));
-            });
+            services.AddTransient<IPolicyEvaluator, StatusPolicyEvaluator>();
+            services.AddAuthorization(options => CreateAuthorizationPolicies(options, _options));
+        }
 
-            services.Add(ServiceDescriptor.Transient<IPolicyEvaluator, StatusPolicyEvaluator>());
-            services.AddAuthorizationPolicyEvaluator();
+        private static void CreateAuthorizationPolicies(AuthorizationOptions authOptions, ApplicationOptions options)
+        {
+            foreach (var application in options.Applications)
+            {
+                var schemes = ProxyAuthComponents.GetAuthSchemes(application);
+
+                if (application.HasPathMode(PathAuthOptions.AuthMode.Api))
+                {
+                    authOptions.AddPolicy(ProxyAuthComponents.GetApiPolicyName(application), builder =>
+                    {
+                        var apiSchemes = new List<string>() { schemes.ApiName };
+                        if (application.ApiAllowWebSession)
+                            apiSchemes.Add(schemes.CookieName);
+
+                        builder.AddAuthenticationSchemes(apiSchemes.ToArray())
+                            .RequireAuthenticatedUser()
+                            .AddRequirements(new AuthorizationClaimsRequirement(application.WebRequireRoleClaim));
+                    });
+                }
+
+                if (application.HasPathMode(PathAuthOptions.AuthMode.Web))
+                {
+                    authOptions.AddPolicy(ProxyAuthComponents.GetWebPolicyName(application), builder =>
+                    {
+                        builder.AddAuthenticationSchemes(schemes.WebName)
+                            .RequireAuthenticatedUser();
+
+                        if (application.WebRequireRoleClaim)
+                            builder.RequireRole(ProxyAuthComponents.WebUserRole);
+                    });
+                }
+            }
         }
 
         private void ConfigureProxy(IServiceCollection services)
         {
-            // Load the oakproxy configuration.
-            services.Configure<OAKProxyOptions>(Configuration.GetSection("OAKProxy"));
-
-            // Limit bearer authorization based on proxied applications.
-            services.ConfigureOptions<JwtBearerConfiguration>();
+            services.AddScoped<IProxyApplicationService, ProxyApplicationService>();
+            services.Configure<HostFilteringOptions>(options =>
+            {
+                options.AllowedHosts = _options.Applications.Select(x => x.Host.Value.Value).ToArray();
+            });
 
             // Register the proxy service.
             services.AddProxy();
@@ -75,17 +228,33 @@ namespace OAKProxy
             });
         }
 
-        public void Configure(IApplicationBuilder app, IHostingEnvironment env, HttpForwarder forwarder)
+        public void Configure(IApplicationBuilder app, IApplicationLifetime host)
         {
-            app.UseHealthChecks("/oakproxy_health");
+            if (_options is null)
+            {
+                host.StopApplication();
+                return;
+            }
+
+            if (_options.Server.EnableHealthChecks)
+                app.UseHealthChecks(ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.Health));
             app.UseStatusCodePages(Errors.StatusPageAsync);
             app.UseExceptionHandler(new ExceptionHandlerOptions { ExceptionHandler = Errors.Handle });
-            
-            // There is no app.UseAuthentication() because authentication will be handled by the IPolicyEvaluator
-            // which is invoked in the PolicyEvaluationMiddleware.
-
-            app.UsePolicyEvaluation(policyName: "AuthenticatedUser");
+            if (_options.Server.UseForwardedHeaders)
+                app.UseForwardedHeaders();            
+            app.UseHostFiltering();
+            app.UseAuthentication();
+            app.Map(ProxyMetaEndpoints.PathBase, ConfigureMetaPath);
+            app.UsePolicyEvaluation();
             app.RunProxy();
+        }
+
+        private void ConfigureMetaPath(IApplicationBuilder app)
+        {
+            app.UseWhen(
+                context => context.Request.Path.StartsWithSegments(ProxyMetaEndpoints.AuthenticatedPathBase), 
+                a => a.UsePolicyEvaluation());
+            app.RunProxyMeta();
         }
     }
 }

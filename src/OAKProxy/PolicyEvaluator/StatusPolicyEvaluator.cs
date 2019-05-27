@@ -31,10 +31,10 @@ namespace OAKProxy.PolicyEvaluator
                 return PolicyAuthorizationResult.Success();
             }
 
-            if (result.Failure?.FailedRequirements.Any(x => x is AuthorizationClaimsRequirement) ?? false)
-            {
-                context.SetErrorDetail(Errors.Code.NoAuthorizationClaims, "Authorization claim is missing from the authenticated token.");
-            }
+            //if (result.Failure?.FailedRequirements.Any(x => x is AuthorizationClaimsRequirement) ?? false)
+            //{
+            //    context.SetErrorDetail(Errors.Code.NoAuthorizationClaims, "Authorization claim is missing from the authenticated token.");
+            //}
             
             // If authentication was successful, return forbidden, otherwise challenge
             return (authenticationResult.Succeeded)

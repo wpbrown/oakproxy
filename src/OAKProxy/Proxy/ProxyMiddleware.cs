@@ -1,6 +1,7 @@
 ﻿using Microsoft.ApplicationInsights.DataContracts;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Extensions;
+using Microsoft.Extensions.Options;
 using System;
 using System.Linq;
 using System.Net.Http;
@@ -12,29 +13,27 @@ namespace OAKProxy.Proxy
 {
     public class ProxyMiddleware
     {
-        private readonly ProxyService _proxyService;
+        private readonly KerberosIdentityService _proxyService;
+        private readonly Authenticator[] _authenticators;
 
-        public ProxyMiddleware(RequestDelegate next, ProxyService service)
+        public ProxyMiddleware(RequestDelegate next, KerberosIdentityService service, IOptions<ApplicationOptions> options)
         {
             _proxyService = service;
+            _authenticators = options.Value.Authenticators;
         }
 
-        public async Task Invoke(HttpContext context, HttpForwarder httpForwarder)
+        public async Task Invoke(HttpContext context, HttpForwarder httpForwarder, IProxyApplicationService applicationService)
         {
             if (context == null)
             {
                 throw new ArgumentNullException(nameof(context));
             }
-            
-            Uri destinationAppUri = _proxyService.RouteRequest(context.User);
-            if (destinationAppUri is null)
-            {
-                context.Response.StatusCode = 502;
-                context.SetErrorDetail(Errors.Code.NoRoute, "No route for this request");
-                return;
-            }
 
-            WindowsIdentity domainIdentity = _proxyService.TranslateDomainIdentity(context.User);
+            var application = applicationService.GetActiveApplication();
+            var authenticator = _authenticators.First(a => a.Name == application.AuthenticatorBindings.First().Name);
+            Uri destinationAppUri = application.Destination;
+
+            WindowsIdentity domainIdentity = _proxyService.TranslateDomainIdentity(context.User, authenticator);
             if (domainIdentity is null)
             {
                 context.Response.StatusCode = 403;

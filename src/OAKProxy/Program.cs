@@ -1,14 +1,17 @@
 ﻿using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.WindowsServices;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.EventLog;
+using Microsoft.Extensions.Options;
 using OAKProxy.Logging;
 using OAKProxy.Proxy;
 using ProcessPrivileges;
 using System;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -19,6 +22,8 @@ namespace OAKProxy
     {
         public static void Main(string[] args)
         {
+            TypeDescriptor.AddAttributes(typeof(HostString), new TypeConverterAttribute(typeof(HostStringTypeConverter)));
+
             bool isService = args.Contains("-service");
             bool useTcb = args.Contains("-tcb");
             if (isService)
@@ -30,7 +35,7 @@ namespace OAKProxy
 
             var webHost = CreateWebHostBuilder(isService).Build();
             var logger = webHost.Services.GetRequiredService<ILogger<Program>>();
-            var forwarder = webHost.Services.GetRequiredService<HttpForwarder>();
+
             ConfigureProcessPrivileges(logger, useTcb);
 
             if (isService)
@@ -45,20 +50,35 @@ namespace OAKProxy
 
         private static IWebHostBuilder CreateWebHostBuilder(bool service)
         {
-            var config = new ConfigurationBuilder()
-                .SetBasePath(Directory.GetCurrentDirectory())
-                .AddJsonFile("appsettings.json", optional: true)
-                .AddJsonFile("appsettings.Development.json", optional: true)
+            var hostConfig = SetupConfiguration(new ConfigurationBuilder().SetBasePath(Directory.GetCurrentDirectory()))
                 .Build();
 
-            return WebHost.CreateDefaultBuilder()
-                .UseConfigurationSection(config.GetSection("Host"))
-                .ConfigureLogging(logging =>
+            return new WebHostBuilder()
+                .UseUrls(hostConfig.GetValue("Server:Urls", "http://*:9000"))
+                .UseContentRoot(Directory.GetCurrentDirectory())
+                .UseConfigurationSection(hostConfig.GetSection("Configuration:Host"))
+                .ConfigureAppConfiguration((hostingContext, config) =>
                 {
-                    logging.ClearProviders();
+                    var env = hostingContext.HostingEnvironment;
+                    SetupConfiguration(config, env.EnvironmentName, reload: true);
+                })
+                .ConfigureLogging((hostingContext, logging) =>
+                {
+                    var loggingSection = hostingContext.Configuration.GetSection("Configuration:Logging");
+                    if (loggingSection.Exists())
+                    {
+                        logging.AddConfiguration(loggingSection);
+                    }
+                    else
+                    {
+                        var level = hostingContext.Configuration.GetValue<LogLevel>("Server:LogLevel", LogLevel.Information);
+                        logging.AddFilter(null, level);
+                    }
+                    
                     if (service)
                     {
-                        logging.AddProvider(new DeferringLoggerProvider(new EventLogLoggerProvider(new EventLogSettings {
+                        logging.AddProvider(new DeferringLoggerProvider(new EventLogLoggerProvider(new EventLogSettings
+                        {
                             SourceName = "OAKProxy"
                         })));
                     }
@@ -67,8 +87,33 @@ namespace OAKProxy
                         logging.AddConsole();
                     }
                 })
-                .UseApplicationInsights()
+                .UseDefaultServiceProvider((context, options) =>
+                {
+                    options.ValidateScopes = context.HostingEnvironment.IsDevelopment();
+                })
+                .UseKestrel((builderContext, options) =>
+                {
+                    options.Configure(builderContext.Configuration.GetSection("Configuration:Kestrel"));
+                })
+                .ConfigureServices((context, services) => {
+                    services.AddOptions<ApplicationOptions>()
+                        .Bind(context.Configuration)
+                        .ValidateDataAnnotations();
+                    services.AddSingleton<IValidateOptions<ApplicationOptions>, ApplicationOptions>();
+                })
                 .UseStartup<Startup>();
+        }
+
+        private static IConfigurationBuilder SetupConfiguration(IConfigurationBuilder builder, string environment = null, bool reload = false)
+        {
+            builder.AddYamlFile("oakproxy.yml", optional: true, reloadOnChange: reload);
+                   
+            if (!String.IsNullOrEmpty(environment))
+            {
+                builder.AddYamlFile($"oakproxy.{environment}.yml", optional: true, reloadOnChange: reload);
+            }
+
+            return builder;
         }
 
         private static void ConfigureProcessPrivileges(ILogger logger, bool useTcb)
