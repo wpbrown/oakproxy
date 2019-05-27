@@ -11,7 +11,7 @@ namespace OAKProxy.Proxy
         public static readonly string WebAuth = "web";
         public static readonly string ApiAuth = "api";
 
-        public static readonly string WebUserRole = "user_impersonation";
+        public static readonly string WebUserRole = "user_web";
         public static readonly string ApiAppRole = "app_impersonation";
         public static readonly string ApiUserScope = "user_impersonation";
 

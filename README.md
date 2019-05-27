@@ -1,21 +1,32 @@
-![img](docs/images/title.svg)
+![OAKProxy](docs/images/title.svg)
 <hr/>
 
-OAKProxy is an OAuth2 to Kerberos gateway. It allows containerized, PaaS, or otherwise non-domain clients to integrate with legacy domain systems using only HTTPS and Azure AD authentication. Neither end-user clients nor applications require connectivity to AD DS. Incoming connections are authorized with JWT bearer tokens obtained from Azure AD only. A kerberos token is retrieved for the user identified by the JWT (using constrained delegation, S4U2Self) and used to forward the request to a backend (using S4U2Proxy). Backend applications require zero modification as the proxied request will look just like one coming from a domain-joined client. Backends can also use constrained delegation themselves.
+OAKProxy is an OAuth2 and OpenID Connect to Kerberos gateway. It allows containerized, PaaS, or otherwise non-domain clients to integrate with legacy domain systems using only HTTPS and Azure AD authentication. Neither end-user clients nor applications require connectivity to AD DS. Incoming connections are authorized with JWT bearer tokens obtained from Azure AD only. A Kerberos token is retrieved for the user identified by the JWT (using constrained delegation, S4U2Self) and used to forward the request to a backend (using S4U2Proxy). Backend applications require zero modification as the proxied request will look just like one coming from a domain-joined client. Backends can also use constrained delegation themselves.
 
-![img](docs/images/highlevel.svg)
+![High-level diagram showing a function app and web app calling in to a domain environment. OAKProxy is depicted translating incoming OAuth2 to Kerberos.](docs/images/highlevel.svg)
 
 AD domain authentication is often a roadblock when enterprises attempt to start modernizing a legacy system using the [strangler pattern](https://docs.microsoft.com/en-us/azure/architecture/patterns/strangler). The strangler pattern advocates incrementally peeling functionality out of the legacy system in to a new environment. However, legacy and modern authentication do not mix. A service running in Azure with an Azure AD security principal has no trust in the AD domain. OAKProxy is a gateway that allows the AD domain to trust Azure AD identity. With OAKProxy, modern and legacy authentication can coexist in a single system.
-
-OAKProxy is for bearer authentication (e.g. REST API calls) only. If you are looking for a browser session aware (OIDC to Kerberos) proxy, see [Azure AD Application Proxy](https://docs.microsoft.com/en-us/azure/active-directory/manage-apps/application-proxy).
 
 ## Features
 
 * A single instance can proxy any number of applications.
 * Stateless. Can be deployed in a highly-available configuration.
-* Translate user identies (token acquired via auth code grant) to domain users.
+* Translate user identities (token acquired via auth code grant) to domain users.
 * Translate application identities (token acquired via client credential grant) to domain users.
 * Each AD domain application gets a unique identity with roles and scopes in Azure AD.
+
+## Azure AD Application Proxy
+
+OAKProxy provides similar functionality to [Azure AD Application Proxy](https://docs.microsoft.com/en-us/azure/active-directory/manage-apps/application-proxy). Application Proxy is a fully managed PaaS service. An Azure AD Basic or Premium license is required for each user. 
+
+Feature | OAKProxy | Azure AD App Proxy
+--- | --- | ---
+JWT Pre-Authentication | Yes | User Only
+PaaS Frontend | No | Yes
+Outbound Tunnel | No | Yes
+Multi-Region Ingress | Deployable | No
+Open Source | Yes | No
+Service Principal KCD | Yes | No
 
 # Documentation
 
