@@ -1,7 +1,7 @@
 ![OAKProxy](docs/images/title.svg)
 <hr/>
 
-[![Build Status](https://dev.azure.com/rebeagle/oakproxy/_apis/build/status/wpbrown?branchName=master)](https://dev.azure.com/rebeagle/oakproxy/_build/latest?definitionId=7&branchName=master)
+[![Build Status](https://dev.azure.com/rebeagle/oakproxy/_apis/build/status/oakproxy?branchName=master)](https://dev.azure.com/rebeagle/oakproxy/_build/latest?definitionId=7&branchName=master)
 
 OAKProxy is an OAuth2 and OpenID Connect to Kerberos gateway. It allows containerized, PaaS, or otherwise non-domain clients to integrate with legacy domain systems using only HTTPS and Azure AD authentication. Neither end-user clients nor applications require connectivity to AD DS. Incoming connections are authorized with JWT bearer tokens obtained from Azure AD only. A Kerberos token is retrieved for the user identified by the JWT (using constrained delegation, S4U2Self) and used to forward the request to a backend (using S4U2Proxy). Backend applications require zero modification as the proxied request will look just like one coming from a domain-joined client. Backends can also use constrained delegation themselves.
 
