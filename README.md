@@ -36,6 +36,7 @@ License Required | No | Yes
 - [OAuth2](#oauth2)
   - [User Impersonation](#user-impersonation)
   - [Service Accounts](#service-accounts)
+- [OpenID Connect](#openid-connect)
 - [Identity Translation](#identity-translation)
   - [Users](#users)
   - [Applications](#applications)
@@ -47,14 +48,30 @@ License Required | No | Yes
     - [Configure a gMSA for Constrained Delegation](#configure-a-gmsa-for-constrained-delegation)
 - [Installation](#installation)
 - [Uninstallation](#uninstallation)
-- [Application Configuration](#application-configuration)
+- [Azure AD Application Configuration](#azure-ad-application-configuration)
   - [Register Applications in Azure AD](#register-applications-in-azure-ad)
+    - [Configure API Access](#configure-api-access)
+    - [Configure Web Access](#configure-web-access)
+      - [Require User Assignment](#require-user-assignment)
+      - [Disable Implicit ID Tokens](#disable-implicit-id-tokens)
+  - [Manual Application Setup](#manual-application-setup)
+    - [Expose an API Scope](#expose-an-api-scope)
     - [Optional Claims for Alternate Logon ID](#optional-claims-for-alternate-logon-id)
     - [Optional Claims for B2B Users](#optional-claims-for-b2b-users)
-  - [Configuration File](#configuration-file)
-    - [ProxiedApplication Object](#proxiedapplication-object)
-    - [ServicePrincipalMapping Object](#serviceprincipalmapping-object)
-    - [Complete Example](#complete-example)
+    - [Optional Claim for OpenID sessions](#optional-claim-for-openid-sessions)
+- [OAKProxy Configuration](#oakproxy-configuration)
+  - [Configuration File Schema](#configuration-file-schema)
+    - [Server Object](#server-object)
+    - [Azure AD Identity Provider Object](#azure-ad-identity-provider-object)
+    - [Kerberos Authenticator Object](#kerberos-authenticator-object)
+    - [Service Principal Mapping Object](#service-principal-mapping-object)
+    - [Application Object](#application-object)
+    - [Path Authentication Option Object](#path-authentication-option-object)
+    - [Azure AD Identity Provider Binding Object](#azure-ad-identity-provider-binding-object)
+    - [Kerberos Authenticator Binding Object](#kerberos-authenticator-binding-object)
+    - [Subsystem Configuration](#subsystem-configuration)
+  - [Example Configuration](#example-configuration)
+    - [HTTPS](#https)
 - [Troubleshooting](#troubleshooting)
 - [Roadmap](#roadmap)
 
@@ -88,7 +105,9 @@ An application can acquire a JWT token that will allow it to call a proxied API 
 
 # OpenID Connect
 
-Applications proxied by OAKProxy can be directly accessed by users with a web browser.
+Applications proxied by OAKProxy can be directly accessed by users with a web browser. OAKProxy will authentication the user with OpenID Connect and establish a session with a cookie.
+
+If the users signs out of Azure AD, they will be automatically signed out of the OAKProxy applications as well.
 
 # Identity Translation
 
