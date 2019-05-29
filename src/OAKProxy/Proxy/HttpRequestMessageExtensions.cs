@@ -15,9 +15,9 @@ namespace OAKProxy.Proxy
             return message.Properties["_request_user"] as ClaimsPrincipal;
         }
 
-        public static void SetUser(this HttpRequestMessage message, ClaimsPrincipal context)
+        public static void SetUser(this HttpRequestMessage message, ClaimsPrincipal user)
         {
-            message.Properties.Add("_request_user", context);
+            message.Properties.Add("_request_user", user);
         }
 
         public static string GetAuthenticatorUser(this HttpRequestMessage message)

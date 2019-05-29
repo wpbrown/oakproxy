@@ -1,13 +1,10 @@
-﻿using Microsoft.ApplicationInsights.DataContracts;
+﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http;
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Net.Http;
 using System.Security.Principal;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace OAKProxy.Proxy
 {

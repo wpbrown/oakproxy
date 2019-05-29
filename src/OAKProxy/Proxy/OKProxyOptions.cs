@@ -77,7 +77,7 @@ namespace OAKProxy.Proxy
         public HeaderDefinition[] HeaderDefinitions { get; set; }
     }
 
-    public class HeaderDefinition
+    public class HeaderDefinition : IValidatableObject
     {
         [Required]
         public string HeaderName { get; set; }
@@ -85,6 +85,16 @@ namespace OAKProxy.Proxy
         public string ClaimName { get; set; }
 
         public string Expression { get; set; }
+
+        public bool Required { get; set; }
+
+        public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+        {
+            if (!String.IsNullOrEmpty(ClaimName) && !String.IsNullOrEmpty(Expression))
+            {
+                yield return new ValidationResult($"Use {nameof(ClaimName)} or {nameof(Expression)}. Both can not be set.", new string[] { nameof(ClaimName), nameof(Expression) });
+            }
+        }
     }
 
     public class IdentityProviderBinding : IValidatableObject

@@ -149,7 +149,6 @@ namespace OAKProxy
 
                 services.Configure<OpenIdConnectOptions>(schemes.OpenIdName, options =>
                 {
-                    options.ClaimActions.Remove("aud");
                     options.ClaimActions.DeleteClaims("aio", "family_name", "given_name", "name", "sub", "tid", "unique_name", "uti");
 
                     options.TokenValidationParameters.AuthenticationType = ProxyAuthComponents.WebAuth;
@@ -219,10 +218,15 @@ namespace OAKProxy
                 var kerberosAuthenticator = application.AuthenticatorBindings == null ? null :
                     _options.Authenticators.FirstOrDefault(a => a.Type == AuthenticatorType.Kerberos &&
                         application.AuthenticatorBindings.Any(b => b.Name == a.Name));
+                var headersAuthenticator = application.AuthenticatorBindings == null ? null :
+                    _options.Authenticators.FirstOrDefault(a => a.Type == AuthenticatorType.Headers &&
+                        application.AuthenticatorBindings.Any(b => b.Name == a.Name));
 
                 var authenticators = new List<IAuthenticator>();
                 if (kerberosAuthenticator != null)
                     authenticators.Add(new KerberosAuthenticator(kerberosAuthenticator));
+                if (headersAuthenticator != null)
+                    authenticators.Add(new HeadersAuthenticator(headersAuthenticator, null));
                 // }}}
 
                 services.AddHttpClient(application.Name).ConfigureHttpMessageHandlerBuilder(builder =>
