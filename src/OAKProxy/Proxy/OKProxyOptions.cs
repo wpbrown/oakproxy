@@ -2,12 +2,13 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
 
 namespace OAKProxy.Proxy
 {
-    public class ApplicationOptions : IValidateOptions<ApplicationOptions>
+    public class ApplicationOptions : IValidatableObject
     {
         [Required, ValidateObject]
         public ServerOptions Server { get; set; }
@@ -21,29 +22,24 @@ namespace OAKProxy.Proxy
         [ValidateCollection]
         public AuthenticatorOptionsBase[] Authenticators { get; set; }
 
-        public ValidateOptionsResult Validate(string _, ApplicationOptions options)
+        public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
         {
-            if (options.Applications is null)
-                return ValidateOptionsResult.Success;
-
-            foreach (var application in options.Applications)
+            foreach (var application in Applications)
             {
                 var name = application.IdentityProviderBinding.Name;
-                if (options.IdentityProviders is null || !options.IdentityProviders.Any(i => i.Name == name))
-                    return ValidateOptionsResult.Fail($"No identity provider with name '{name}' configured.");
+                if (!IdentityProviders.Any(i => i.Name == name))
+                    yield return new ValidationResult($"No identity provider with name '{name}' configured.", new string[] { nameof(Applications) });
 
                 if (application.AuthenticatorBindings != null)
                 {
                     foreach (var authBinding in application.AuthenticatorBindings)
                     {
                         var authName = authBinding.Name;
-                        if (options.Authenticators is null || !options.Authenticators.Any(a => a.Name == authName))
-                            return ValidateOptionsResult.Fail($"No authenticator with name '{authName}' configured.");
+                        if (Authenticators is null || !Authenticators.Any(a => a.Name == authName))
+                            yield return new ValidationResult($"No authenticator with name '{authName}' configured.", new string[] { nameof(Applications) });
                     }
                 }
             }
-
-            return ValidateOptionsResult.Success;
         }
     }
 
@@ -70,13 +66,28 @@ namespace OAKProxy.Proxy
         [Required]
         public string Name { get; set; }
 
+        // Kerberos
         public SidMatchingOption SidMatching { get; set; }
 
         [ValidateCollection]
         public ServicePrincipalMapping[] ServicePrincipalMappings { get; set; }
+
+        // Headers
+        [ValidateCollection]
+        public HeaderDefinition[] HeaderDefinitions { get; set; }
     }
 
-    public class IdentityProviderBinding
+    public class HeaderDefinition
+    {
+        [Required]
+        public string HeaderName { get; set; }
+
+        public string ClaimName { get; set; }
+
+        public string Expression { get; set; }
+    }
+
+    public class IdentityProviderBinding : IValidatableObject
     {
         [Required]
         public string Name { get; set; }
@@ -84,12 +95,19 @@ namespace OAKProxy.Proxy
         [Required]
         public string ClientId { get; set; }
 
-        [Required]
         public string AppIdUri { get; set; }
 
         public string ClientSecret { get; set; }
 
         public bool DisableImplicitIdToken { get; set; }
+
+        public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+        {
+            if (DisableImplicitIdToken && String.IsNullOrWhiteSpace(ClientSecret))
+            {
+                yield return new ValidationResult($"If {nameof(DisableImplicitIdToken)} is true, then {nameof(ClientSecret)} is required.", new string[] { nameof(DisableImplicitIdToken), nameof(ClientSecret) });
+            }
+        }
     }
 
     public class AuthenticatorBinding
@@ -112,7 +130,7 @@ namespace OAKProxy.Proxy
         public bool EnableHealthChecks { get; set; }
     }
 
-    public class ProxyApplication
+    public class ProxyApplication : IValidatableObject
     {
         [Required]
         public string Name { get; set; }
@@ -129,7 +147,7 @@ namespace OAKProxy.Proxy
         [Required]
         public Uri Destination { get; set; }
 
-        [ValidateCollection]
+        [Required, MinLength(1), ValidateCollection]
         public PathAuthOptions[] PathAuthOptions { get; set; }
 
         public bool ApiAllowWebSession { get; set; }
@@ -140,13 +158,21 @@ namespace OAKProxy.Proxy
 
         public PathAuthOptions.AuthMode? GetPathMode(PathString path)
         {
-            var options = PathAuthOptions.FirstOrDefault(o => path.StartsWithSegments(o.Path));
+            var options = PathAuthOptions.FirstOrDefault(o => path.StartsWithSegments(o.Path.Value));
             return options?.Mode.Value;
         }
 
         public bool HasPathMode(PathAuthOptions.AuthMode mode)
         {
-            return PathAuthOptions.Any(o => o.Mode.Value == mode);
+            return PathAuthOptions != null && PathAuthOptions.Any(o => o.Mode.Value == mode);
+        }
+
+        public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+        {
+            if (HasPathMode(Proxy.PathAuthOptions.AuthMode.Api) && String.IsNullOrEmpty(IdentityProviderBinding.AppIdUri))
+            {
+                yield return new ValidationResult($"If any paths use API mode, then {nameof(IdentityProviderBinding.AppIdUri)} is required.", new string[] { nameof(IdentityProviderBinding.AppIdUri) });
+            }
         }
     }
 
@@ -188,6 +214,7 @@ namespace OAKProxy.Proxy
 
     public enum AuthenticatorType
     {
-        Kerberos
+        Kerberos,
+        Headers
     }
 }

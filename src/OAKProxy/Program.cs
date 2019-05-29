@@ -99,7 +99,6 @@ namespace OAKProxy
                     services.AddOptions<ApplicationOptions>()
                         .Bind(context.Configuration)
                         .ValidateDataAnnotations();
-                    services.AddSingleton<IValidateOptions<ApplicationOptions>, ApplicationOptions>();
                 })
                 .UseStartup<Startup>();
         }
