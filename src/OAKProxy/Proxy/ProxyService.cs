@@ -45,7 +45,7 @@ namespace OAKProxy.Proxy
             }
         }
 
-        public WindowsIdentity TranslateDomainIdentity(ClaimsPrincipal user, Authenticator options)
+        public WindowsIdentity TranslateDomainIdentity(ClaimsPrincipal user, AuthenticatorOptionsBase options)
         {
             string objectId = user.Claims.First(c => c.Type == "oid").Value;
 

@@ -17,7 +17,8 @@ namespace OAKProxy
             NoRoute,
             NoIdentityTranslation,
             NoAuthorizationClaims,
-            UnconfiguredPath
+            UnconfiguredPath,
+            NoResponse
         }
 
         public static readonly MediaTypeHeaderValue ApplicationJson = 

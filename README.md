@@ -381,8 +381,8 @@ Name | Default | Description
 --- | --- | ---
 **Server** | *required* | A single server object.
 **IdentityProviders** | *required* | An array of at least one identity provider object.
-**Authenticators** | *required* |  An array of at least one authenticator object.
 **Applications** | *required* |  An array of at least one application.
+Authenticators | *optional* |  An array of authenticator object.
 Configuration | *optional* | Configuration of ASP.NET Core subsystems.
 
 ### Server Object
@@ -426,10 +426,10 @@ Name | Default | Description
 --- | --- | ---
 **Name** | *required* | An alphanumeric  name for the object.
 **IdentityProviderBinding** | *required* | A single identity provider binding object.
-**AuthenticatorBindings** | *required* | At least one authenticator binding object.
 **Host** | *required* | The frontend host name of the application. Example: `hr.contoso.com`.
 **Destination** | *required* | The URL for the backend application being proxied. Example: `http://hr.corp.contoso.com/`.
 **PathAuthOptions** | *required* | At least one path authentication option object.
+AuthenticatorBindings | *optional* | An array of authenticator binding objects.
 ApiAllowWebSession | `false` | For paths configured for `Api` authentication, allow them to also accept a valid pre-established OpenID Connect web session instead of a JWT bearer token. This is useful for supporting legacy applications that make authenticated AJAX calls from their web application.
 WebRequireRoleClaim | `false` | Require the user who logs directly in the application via the web to have the `user_web` role in their token. See [Require User Assignment](#require-user-assignment) for more information.
 SessionCookieSameSiteMode | `Lax` | The SameSite mode to use for the OpenID Connect session cookie. See "Cookie.SameSite" under "AddCookie Options" [here](https://docs.microsoft.com/en-us/aspnet/core/security/authentication/cookie?view=aspnetcore-2.2#configuration) for more information.
@@ -438,7 +438,7 @@ SessionCookieSameSiteMode | `Lax` | The SameSite mode to use for the OpenID Conn
 
 Name | Default | Description
 --- | --- | ---
-**Path** | *required* | The path within the application. Example: `/api`.
+**Path** | *required* | The path within the application. Example: `/api`. An empty string `Path: ''`, matches all paths.
 **Mode** | *required* | The authentication mode to accept: `Web` (OpenID Connect) or `API` (JWT Bearer).
 
 ### Azure AD Identity Provider Binding Object
@@ -506,7 +506,7 @@ Applications:
   PathAuthOptions:
   - Path: '/api'
     Mode: Api
-  - Path: '/'
+  - Path: ''
     Mode: Web
   ApiAllowWebSession: false
 - Name: contoso_billing
@@ -518,7 +518,7 @@ Applications:
   AuthenticatorBindings:
   - Name: contoso_forest
   PathAuthOptions:
-  - Path: '/'
+  - Path: ''
     Mode: Web
   WebRequireRoleClaim: true
 

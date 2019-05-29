@@ -18,8 +18,8 @@ namespace OAKProxy.Proxy
         [Required, MinLength(1), ValidateCollection]
         public IdentityProvider[] IdentityProviders { get; set; }
 
-        [Required, MinLength(1), ValidateCollection]
-        public Authenticator[] Authenticators { get; set; }
+        [ValidateCollection]
+        public AuthenticatorOptionsBase[] Authenticators { get; set; }
 
         public ValidateOptionsResult Validate(string _, ApplicationOptions options)
         {
@@ -32,11 +32,14 @@ namespace OAKProxy.Proxy
                 if (options.IdentityProviders is null || !options.IdentityProviders.Any(i => i.Name == name))
                     return ValidateOptionsResult.Fail($"No identity provider with name '{name}' configured.");
 
-                foreach (var authBinding in application.AuthenticatorBindings)
+                if (application.AuthenticatorBindings != null)
                 {
-                    var authName = authBinding.Name;
-                    if (options.Authenticators is null || !options.Authenticators.Any(a => a.Name == authName))
-                        return ValidateOptionsResult.Fail($"No authenticator with name '{authName}' configured.");
+                    foreach (var authBinding in application.AuthenticatorBindings)
+                    {
+                        var authName = authBinding.Name;
+                        if (options.Authenticators is null || !options.Authenticators.Any(a => a.Name == authName))
+                            return ValidateOptionsResult.Fail($"No authenticator with name '{authName}' configured.");
+                    }
                 }
             }
 
@@ -59,7 +62,7 @@ namespace OAKProxy.Proxy
         public string TenantId { get; set; }
     }
 
-    public class Authenticator
+    public class AuthenticatorOptionsBase
     {
         [Required]
         public AuthenticatorType? Type { get; set; }
@@ -117,7 +120,7 @@ namespace OAKProxy.Proxy
         [Required, ValidateObject]
         public IdentityProviderBinding IdentityProviderBinding { get; set; }
 
-        [Required, ValidateCollection]
+        [ValidateCollection]
         public AuthenticatorBinding[] AuthenticatorBindings { get; set; }
 
         [Required]
@@ -158,7 +161,7 @@ namespace OAKProxy.Proxy
 
     public class PathAuthOptions
     {
-        [Required]
+        [Required(AllowEmptyStrings = true)]
         public PathString Path { get; set; }
 
         [Required]

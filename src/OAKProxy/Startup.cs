@@ -209,22 +209,41 @@ namespace OAKProxy
         private void ConfigureProxy(IServiceCollection services)
         {
             services.AddScoped<IProxyApplicationService, ProxyApplicationService>();
+            services.AddSingleton<KerberosIdentityService>();
+            services.AddMemoryCache();
+
+            foreach (var application in _options.Applications)
+            {
+                // will refactor {{{
+                var kerberosAuthenticator = application.AuthenticatorBindings == null ? null :
+                    _options.Authenticators.FirstOrDefault(a => a.Type == AuthenticatorType.Kerberos &&
+                        application.AuthenticatorBindings.Any(b => b.Name == a.Name));
+
+                var authenticators = new List<IAuthenticator>();
+                if (kerberosAuthenticator != null)
+                    authenticators.Add(new KerberosAuthenticator(kerberosAuthenticator));
+                // }}}
+
+                services.AddHttpClient(application.Name).ConfigureHttpMessageHandlerBuilder(builder =>
+                {
+                    var primaryHandler = new HttpClientHandler
+                    {
+                        AllowAutoRedirect = false,
+                        UseCookies = false,
+                        UseProxy = false
+                    };
+
+                    foreach (var authenticator in authenticators)
+                        authenticator.Configure(builder);
+                })
+                .ConfigureHttpClient(client => {
+                    client.BaseAddress = application.Destination;
+                });
+            }
+
             services.Configure<HostFilteringOptions>(options =>
             {
                 options.AllowedHosts = _options.Applications.Select(x => x.Host.Value.Value).ToArray();
-            });
-
-            // Register the proxy service.
-            services.AddProxy();
-            services.AddMemoryCache();
-
-            // Define the forwarder used by the proxy to make make requests.
-            services.AddHttpClient<HttpForwarder>().ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
-            {
-                AllowAutoRedirect = false,
-                UseCookies = false,
-                UseDefaultCredentials = true,
-                UseProxy = false
             });
         }
 

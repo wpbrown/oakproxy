@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using System;
 using System.Linq;
 using System.Net.Http;
+using System.Net.Sockets;
 using System.Security.Principal;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,16 +14,14 @@ namespace OAKProxy.Proxy
 {
     public class ProxyMiddleware
     {
-        private readonly KerberosIdentityService _proxyService;
-        private readonly Authenticator[] _authenticators;
+        private readonly IHttpClientFactory _clientFactory;
 
-        public ProxyMiddleware(RequestDelegate next, KerberosIdentityService service, IOptions<ApplicationOptions> options)
+        public ProxyMiddleware(RequestDelegate next, IHttpClientFactory clientFactory)
         {
-            _proxyService = service;
-            _authenticators = options.Value.Authenticators;
+            _clientFactory = clientFactory;
         }
 
-        public async Task Invoke(HttpContext context, HttpForwarder httpForwarder, IProxyApplicationService applicationService)
+        public async Task Invoke(HttpContext context, IProxyApplicationService applicationService)
         {
             if (context == null)
             {
@@ -30,40 +29,49 @@ namespace OAKProxy.Proxy
             }
 
             var application = applicationService.GetActiveApplication();
-            var authenticator = _authenticators.First(a => a.Name == application.AuthenticatorBindings.First().Name);
-            Uri destinationAppUri = application.Destination;
+            var client = _clientFactory.CreateClient(application.Name);
 
-            WindowsIdentity domainIdentity = _proxyService.TranslateDomainIdentity(context.User, authenticator);
-            if (domainIdentity is null)
+            using (var requestMessage = CreateHttpRequestMessageFromIncomingRequest(context))
             {
-                context.Response.StatusCode = 403;
-                context.SetErrorDetail(Errors.Code.NoIdentityTranslation, "Identity could not be translated to a domain identity");
-                return;
-            }
-
-            var telemetry = context.Features.Get<RequestTelemetry>();
-            if (telemetry != null)
-            {
-                telemetry.Context.User.AccountId = domainIdentity.Name;
-            }
-
-            await ProxyRequest(context, httpForwarder, domainIdentity, destinationAppUri);
-        }
-
-        private static async Task ProxyRequest(HttpContext context, HttpForwarder httpForwarder, WindowsIdentity domainIdentity, Uri destinationAppUri)
-        {
-            using (var requestMessage = CreateHttpRequestMessageFromIncomingRequest(context.Request, destinationAppUri))
-            {
-                using (var responseMessage = await httpForwarder.ForwardAsync(requestMessage, domainIdentity, context.RequestAborted))
+                try
                 {
-                    await CopyProxiedMessageToResponseAsync(context.Response, responseMessage, context.RequestAborted);
+                    using (var responseMessage = await client.SendAsync(requestMessage, context.RequestAborted))
+                    {
+                        await CopyProxiedMessageToResponseAsync(context.Response, responseMessage, context.RequestAborted);
+                    }
+                }
+                catch (AuthenticatorException e)
+                {
+                    context.Response.StatusCode = 403;
+                    context.SetErrorDetail(e.Code, e.Message);
+                }
+                catch (HttpRequestException e)
+                {
+                    if (e.InnerException is SocketException se && se.SocketErrorCode == SocketError.TimedOut) {
+                        context.Response.StatusCode = 504;
+                        context.SetErrorDetail(Errors.Code.NoResponse, "The downstream server did not respond.");
+                    }
+                    else
+                    {
+                        throw;
+                    }
+                }
+
+                var telemetry = context.Features.Get<RequestTelemetry>();
+                var authenticatorUser = requestMessage.GetAuthenticatorUser();
+                if (telemetry != null && authenticatorUser != null)
+                {
+                    telemetry.Context.User.AccountId = authenticatorUser;
                 }
             }
         }
     
-        private static HttpRequestMessage CreateHttpRequestMessageFromIncomingRequest(HttpRequest request, Uri destinationAppUri)
-        {          
+        private static HttpRequestMessage CreateHttpRequestMessageFromIncomingRequest(HttpContext context)
+        {
+            var request = context.Request;
             var requestMessage = new HttpRequestMessage();
+            requestMessage.SetUser(context.User);
+
             var requestMethod = request.Method;
             if (!HttpMethods.IsGet(requestMethod) &&
                 !HttpMethods.IsHead(requestMethod) &&
@@ -77,15 +85,16 @@ namespace OAKProxy.Proxy
             // Copy the request headers
             foreach (var header in request.Headers)
             {
+                if (header.Key.Equals("host", StringComparison.InvariantCultureIgnoreCase))
+                    continue;
+
                 if (!requestMessage.Headers.TryAddWithoutValidation(header.Key, header.Value.ToArray()) && requestMessage.Content != null)
                 {
                     requestMessage.Content?.Headers.TryAddWithoutValidation(header.Key, header.Value.ToArray());
                 }
             }
 
-            var uri = new Uri(UriHelper.BuildAbsolute(destinationAppUri.Scheme, HostString.FromUriComponent(destinationAppUri), 
-                destinationAppUri.AbsolutePath, request.Path, request.QueryString));
-            requestMessage.Headers.Host = uri.Authority;
+            var uri = new Uri(UriHelper.BuildRelative(null, request.Path, request.QueryString), UriKind.Relative);
             requestMessage.RequestUri = uri;
             requestMessage.Method = new HttpMethod(request.Method);
 
