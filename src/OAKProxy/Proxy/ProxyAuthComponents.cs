@@ -15,6 +15,9 @@ namespace OAKProxy.Proxy
         public static readonly string ApiAppRole = "app_impersonation";
         public static readonly string ApiUserScope = "user_impersonation";
 
+        public static readonly string CookiePrefix = ".oakproxy";
+        public static readonly string AuthCookieId = "a";
+
         public static string GetWebPolicyName(ProxyApplication application)
         {
             return application.Name + ".openid";

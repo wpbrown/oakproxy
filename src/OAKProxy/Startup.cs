@@ -144,6 +144,7 @@ namespace OAKProxy
                 {
                     options.AccessDeniedPath = ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.AccessDenied);
                     options.Cookie.SameSite = application.SessionCookieSameSiteMode ?? SameSiteMode.Lax;
+                    options.Cookie.Name = $"{ProxyAuthComponents.CookiePrefix}.{ProxyAuthComponents.AuthCookieId}.{application.Name}";
                 });
 
                 services.Configure<OpenIdConnectOptions>(schemes.OpenIdName, options =>

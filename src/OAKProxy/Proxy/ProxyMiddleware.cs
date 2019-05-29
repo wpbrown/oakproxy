@@ -1,10 +1,14 @@
 ﻿using Microsoft.ApplicationInsights.DataContracts;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Extensions;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Options;
+using Microsoft.Net.Http.Headers;
 using System;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Net.Sockets;
 using System.Security.Principal;
 using System.Threading;
@@ -65,7 +69,9 @@ namespace OAKProxy.Proxy
                 }
             }
         }
-    
+
+        private static readonly Uri cookieUri = new Uri("http://localhost/");
+
         private static HttpRequestMessage CreateHttpRequestMessageFromIncomingRequest(HttpContext context)
         {
             var request = context.Request;
@@ -82,10 +88,14 @@ namespace OAKProxy.Proxy
                 requestMessage.Content = streamContent;
             }
 
-            // Copy the request headers
+            bool needToStripCookie = context.Request.Cookies?.Any(c => c.Key.StartsWith(ProxyAuthComponents.CookiePrefix)) ?? false;
+
             foreach (var header in request.Headers)
             {
-                if (header.Key.Equals("host", StringComparison.InvariantCultureIgnoreCase))
+                if (header.Key.Equals(HeaderNames.Host, StringComparison.InvariantCultureIgnoreCase) ||
+                    (needToStripCookie && header.Key.Equals(HeaderNames.Cookie, StringComparison.InvariantCultureIgnoreCase)) ||
+                    header.Key.StartsWith("X-Forwarded-", StringComparison.InvariantCultureIgnoreCase) ||
+                    header.Key.StartsWith("X-Original-", StringComparison.InvariantCultureIgnoreCase))
                     continue;
 
                 if (!requestMessage.Headers.TryAddWithoutValidation(header.Key, header.Value.ToArray()) && requestMessage.Content != null)
@@ -94,9 +104,26 @@ namespace OAKProxy.Proxy
                 }
             }
 
+            if (needToStripCookie)
+            {
+                var container = new CookieContainer(request.Cookies.Count);
+                foreach (var cookie in request.Cookies.Where(c => !c.Key.StartsWith(ProxyAuthComponents.CookiePrefix)))
+                {
+                    container.Add(cookieUri, new Cookie(cookie.Key, cookie.Value));
+                }
+                if (container.Count > 0)
+                {
+                    var cookieHeaderValue = container.GetCookieHeader(cookieUri);
+                    requestMessage.Headers.Add(HeaderNames.Cookie, cookieHeaderValue);
+                }  
+            }
+
             var uri = new Uri(UriHelper.BuildRelative(null, request.Path, request.QueryString), UriKind.Relative);
             requestMessage.RequestUri = uri;
             requestMessage.Method = new HttpMethod(request.Method);
+            requestMessage.Headers.TryAddWithoutValidation(ForwardedHeadersDefaults.XForwardedHostHeaderName, context.Request.Host.ToUriComponent());
+            requestMessage.Headers.TryAddWithoutValidation(ForwardedHeadersDefaults.XForwardedProtoHeaderName, context.Request.Scheme);
+            requestMessage.Headers.TryAddWithoutValidation(ForwardedHeadersDefaults.XForwardedForHeaderName, context.Connection.RemoteIpAddress.ToString());
 
             return requestMessage;
         }

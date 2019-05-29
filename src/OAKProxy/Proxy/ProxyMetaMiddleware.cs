@@ -31,18 +31,18 @@ namespace OAKProxy.Proxy
                     return;
                 }
 
-                //if (context.Request.Path == ProxyMetaEndpoints.UserSignOut)
-                //{
-                //    var schemes = ProxyAuthComponents.GetAuthSchemes(application);
+                if (context.Request.Path == ProxyMetaEndpoints.UserSignOut)
+                {
+                    var schemes = ProxyAuthComponents.GetAuthSchemes(application);
 
-                //    var properties = new AuthenticationProperties
-                //    {
-                //        RedirectUri = ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.PostSignedOutCallback)
-                //    };
-                //    await context.SignOutAsync(schemes.CookieName);
-                //    await context.SignOutAsync(schemes.OpenIdName, properties);
-                //    return;
-                //}
+                    var properties = new AuthenticationProperties
+                    {
+                        RedirectUri = ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.PostSignedOutCallback)
+                    };
+                    await context.SignOutAsync(schemes.CookieName);
+                    await context.SignOutAsync(schemes.OpenIdName, properties);
+                    return;
+                }
             }
 
             context.Response.StatusCode = (int)HttpStatusCode.NotFound;
