@@ -15,6 +15,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 
 namespace OAKProxy
 {
@@ -23,6 +24,11 @@ namespace OAKProxy
         public static void Main(string[] args)
         {
             TypeDescriptor.AddAttributes(typeof(HostString), new TypeConverterAttribute(typeof(HostStringTypeConverter)));
+            var assembly = Assembly.GetEntryAssembly();
+            var build = assembly.GetCustomAttribute<AssemblyFileVersionAttribute>().Version;
+            var version = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>().InformationalVersion;
+            var title = assembly.GetCustomAttribute<AssemblyTitleAttribute>().Title;
+            var banner = $"Starting {title} version {version} build {build}.";
 
             bool isService = args.Contains("-service");
             bool useTcb = args.Contains("-tcb");
@@ -32,9 +38,14 @@ namespace OAKProxy
                 var pathToContentRoot = Path.GetDirectoryName(pathToExe);
                 Directory.SetCurrentDirectory(pathToContentRoot);
             }
+            else
+            {
+                Console.WriteLine(banner);
+            }
 
             var webHost = CreateWebHostBuilder(isService).Build();
             var logger = webHost.Services.GetRequiredService<ILogger<Program>>();
+            logger.LogInformation(banner);
 
             ConfigureProcessPrivileges(logger, useTcb);
 

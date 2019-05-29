@@ -1,0 +1,6 @@
+﻿<Project>
+  <Import Project="version.props" />
+  <PropertyGroup>
+    <Product>OAKProxy</Product>
+  </PropertyGroup>
+</Project>
