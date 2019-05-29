@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Options;
 using Microsoft.Net.Http.Headers;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -106,16 +107,11 @@ namespace OAKProxy.Proxy
 
             if (needToStripCookie)
             {
-                var container = new CookieContainer(request.Cookies.Count);
-                foreach (var cookie in request.Cookies.Where(c => !c.Key.StartsWith(ProxyAuthComponents.CookiePrefix)))
+                var cookies = CreateCookieHeaderValue(request.Cookies.Where(c => !c.Key.StartsWith(ProxyAuthComponents.CookiePrefix)));
+                if (cookies != null)
                 {
-                    container.Add(cookieUri, new Cookie(cookie.Key, cookie.Value));
+                    requestMessage.Headers.Add(HeaderNames.Cookie, cookies);
                 }
-                if (container.Count > 0)
-                {
-                    var cookieHeaderValue = container.GetCookieHeader(cookieUri);
-                    requestMessage.Headers.Add(HeaderNames.Cookie, cookieHeaderValue);
-                }  
             }
 
             var uri = new Uri(UriHelper.BuildRelative(null, request.Path, request.QueryString), UriKind.Relative);
@@ -126,6 +122,17 @@ namespace OAKProxy.Proxy
             requestMessage.Headers.TryAddWithoutValidation(ForwardedHeadersDefaults.XForwardedForHeaderName, context.Connection.RemoteIpAddress.ToString());
 
             return requestMessage;
+        }
+
+        private static string CreateCookieHeaderValue(IEnumerable<KeyValuePair<string,string>> cookies)
+        {
+            var container = new CookieContainer();
+            foreach (var cookie in cookies)
+            {
+                container.Add(cookieUri, new Cookie(cookie.Key, cookie.Value));
+            }
+
+            return container.Count > 0 ? container.GetCookieHeader(cookieUri) : null;
         }
 
         private static async Task CopyProxiedMessageToResponseAsync(HttpResponse response, HttpResponseMessage responseMessage, CancellationToken token)
