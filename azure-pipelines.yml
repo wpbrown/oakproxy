@@ -40,7 +40,7 @@ jobs:
     displayName: 'Remove DevOps Artifacts Source'
     inputs:
       command: custom
-      arguments: sources remove -Name corefx-s4u
+      arguments: sources disable -Name corefx-s4u
   - script: dotnet publish -c Release -f netcoreapp2.2 -r linux-x64 --self-contained false
     workingDirectory: src/OAKProxy
     displayName: Build
