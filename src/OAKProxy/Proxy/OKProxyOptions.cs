@@ -58,7 +58,7 @@ namespace OAKProxy.Proxy
         public string TenantId { get; set; }
     }
 
-    public class AuthenticatorOptionsBase
+    public class AuthenticatorOptionsBase : IValidatableObject
     {
         [Required]
         public AuthenticatorType? Type { get; set; }
@@ -90,6 +90,15 @@ namespace OAKProxy.Proxy
                         throw new Exception("Unknown authenticator type.");
                 }
             }
+        }
+
+        public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+        {
+#if !ENABLE_KERBEROS_AUTHENTICATOR
+            if (Type == AuthenticatorType.Kerberos)
+                yield return new ValidationResult($"{nameof(Type)} {nameof(AuthenticatorType.Kerberos)} is not supported in this build. You must install the Kerberos enabled build on Windows Server.", new string[] { nameof(Type) });
+#endif
+            yield break;
         }
     }
 

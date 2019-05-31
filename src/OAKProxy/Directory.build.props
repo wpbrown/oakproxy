@@ -2,5 +2,6 @@
   <Import Project="version.props" />
   <PropertyGroup>
     <Product>OAKProxy</Product>
+    <EnableKerberosAuthenticator Condition="'$(DisableKerberosAuthenticator)' != 'true' AND $([MSBuild]::IsOSPlatform('Windows'))">true</EnableKerberosAuthenticator>
   </PropertyGroup>
 </Project>

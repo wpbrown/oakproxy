@@ -1,19 +1,23 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.Web">
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
     <TargetFramework>netcoreapp2.2</TargetFramework>
-    <RuntimeIdentifier>win10-x64</RuntimeIdentifier>
     <IsTransformWebConfigDisabled>true</IsTransformWebConfigDisabled>
     <PreserveCompilationContext>false</PreserveCompilationContext>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(EnableKerberosAuthenticator)' == 'true'">
+    <OutputType>Exe</OutputType>
+    <RuntimeIdentifier>win10-x64</RuntimeIdentifier>
+    <DefineConstants>$(DefineConstants);ENABLE_KERBEROS_AUTHENTICATOR</DefineConstants>
     <PackageConflictPreferredPackages>Microsoft.Private.CoreFx.NETCoreApp;runtime.win-x64.Microsoft.Private.CoreFx.NETCoreApp;$(PackageConflictPreferredPackages)</PackageConflictPreferredPackages>
   </PropertyGroup>
   
   <ItemGroup>
     <Content Update="global.json" CopyToPublishDirectory="Never" />
-    <Content Update="appsettings.*.json" CopyToPublishDirectory="Never" />
+    <Content Update="oakproxy*.yml" CopyToPublishDirectory="Never" />
     <Content Update="Nuget.Config" CopyToPublishDirectory="Never" />
     <Content Include="OAKProxy.psm1" CopyToPublishDirectory="Always" />
-    <PackageReference Include="Microsoft.ApplicationInsights.AspNetCore" Version="2.6.1" />
+    <PackageReference Include="Microsoft.ApplicationInsights.AspNetCore" Version="2.7.0" />
     <PackageReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.AzureAD.UI" Version="2.2.0" />
     <PackageReference Include="Microsoft.AspNetCore.Hosting.WindowsServices" Version="2.2.0" />
@@ -21,11 +25,10 @@
     <PackageReference Include="Microsoft.Extensions.Logging.EventLog" Version="2.2.0" />
     <PackageReference Include="NetEscapades.Configuration.Yaml" Version="1.6.0" />
     <PackageReference Include="System.DirectoryServices.AccountManagement" Version="4.5.0" />
-    <PackageReference Include="Microsoft.Private.CoreFx.NETCoreApp" Version="4.5.220-s4upatch-*" />
-  </ItemGroup>
-  
-  <ItemGroup>
     <WCFMetadata Include="Connected Services" />
   </ItemGroup>
-  
+
+  <ItemGroup Condition="'$(EnableKerberosAuthenticator)' == 'true'">
+    <PackageReference Include="Microsoft.Private.CoreFx.NETCoreApp" Version="4.5.220-s4upatch-*" />
+  </ItemGroup>
 </Project>
