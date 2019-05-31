@@ -75,6 +75,22 @@ namespace OAKProxy.Proxy
         // Headers
         [ValidateCollection]
         public HeaderDefinition[] HeaderDefinitions { get; set; }
+
+        public Type ImplType
+        {
+            get
+            {
+                switch (Type.Value)
+                {
+                    case AuthenticatorType.Kerberos:
+                        return typeof(KerberosAuthenticator);
+                    case AuthenticatorType.Headers:
+                        return typeof(HeadersAuthenticator);
+                    default:
+                        throw new Exception("Unknown authenticator type.");
+                }
+            }
+        }
     }
 
     public class HeaderDefinition : IValidatableObject

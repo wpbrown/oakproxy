@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
@@ -21,6 +22,7 @@ using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
 using System.Net.Http;
+using System.Threading.Tasks;
 
 namespace OAKProxy
 {
@@ -210,25 +212,11 @@ namespace OAKProxy
         {
             services.AddScoped<IProxyApplicationService, ProxyApplicationService>();
             services.AddSingleton<KerberosIdentityService>();
+            services.AddSingleton<IAuthenticatorProvider, AuthenticatorProvider>();
             services.AddMemoryCache();
 
             foreach (var application in _options.Applications)
             {
-                // will refactor {{{
-                var kerberosAuthenticator = application.AuthenticatorBindings == null ? null :
-                    _options.Authenticators.FirstOrDefault(a => a.Type == AuthenticatorType.Kerberos &&
-                        application.AuthenticatorBindings.Any(b => b.Name == a.Name));
-                var headersAuthenticator = application.AuthenticatorBindings == null ? null :
-                    _options.Authenticators.FirstOrDefault(a => a.Type == AuthenticatorType.Headers &&
-                        application.AuthenticatorBindings.Any(b => b.Name == a.Name));
-
-                var authenticators = new List<IAuthenticator>();
-                if (kerberosAuthenticator != null)
-                    authenticators.Add(new KerberosAuthenticator(kerberosAuthenticator));
-                if (headersAuthenticator != null)
-                    authenticators.Add(new HeadersAuthenticator(headersAuthenticator, null));
-                // }}}
-
                 services.AddHttpClient(application.Name).ConfigureHttpMessageHandlerBuilder(builder =>
                 {
                     var primaryHandler = new HttpClientHandler
@@ -238,7 +226,8 @@ namespace OAKProxy
                         UseProxy = false
                     };
 
-                    foreach (var authenticator in authenticators)
+                    var authenticatorProvider = builder.Services.GetService<IAuthenticatorProvider>();
+                    foreach (var authenticator in authenticatorProvider[application.Name])
                         authenticator.Configure(builder);
                 })
                 .ConfigureHttpClient(client => {
@@ -259,6 +248,9 @@ namespace OAKProxy
                 host.StopApplication();
                 return;
             }
+
+            // Warm up the authentication provider service before first request
+            Task.Run(() => app.ApplicationServices.GetService<IAuthenticatorProvider>());
 
             if (_options.Server.EnableHealthChecks)
                 app.UseHealthChecks(ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.Health));
