@@ -36,6 +36,12 @@ jobs:
   - checkout: self
     clean: all
     fetchDepth: 1
+  - task: NuGetCommand@2
+    displayName: 'Remove DevOps Artifacts Source'
+    inputs:
+      nugetConfigPath: src/OAKProxy/NuGet.Config
+      command: custom
+      arguments: sources remove -Name corefx-s4u 
   - script: dotnet publish -c Release -f netcoreapp2.2 -r linux-x64 --self-contained false
     workingDirectory: src/OAKProxy
     displayName: Build
