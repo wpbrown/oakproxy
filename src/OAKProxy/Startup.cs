@@ -73,6 +73,7 @@ namespace OAKProxy
                     options.InstrumentationKey = _options.Server.ApplicationInsightsKey;
                     _configuration.GetSection("Configuration:ApplicationInsights").Bind(options);
                 });
+                services.AddApplicationInsightsTelemetryProcessor<TelemetryProcessor>();
             }
 
             ConfigureAuthentication(services);
