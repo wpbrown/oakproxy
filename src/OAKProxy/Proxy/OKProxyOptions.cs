@@ -161,8 +161,14 @@ namespace OAKProxy.Proxy
         [Required]
         public string Name { get; set; }
 
-        [Required, ValidateObject]
-        public IdentityProviderBinding IdentityProviderBinding { get; set; }
+        internal IdentityProviderBinding IdentityProviderBinding
+        {
+            get { return IdentityProviderBindings[0]; }
+        }
+
+        private const string idpError = "Must contain exactly 1 identity provider binding.";
+        [Required, MinLength(1, ErrorMessage = idpError), MaxLength(1, ErrorMessage = idpError), ValidateCollection]
+        public IdentityProviderBinding[] IdentityProviderBindings { get; set; }
 
         [ValidateCollection]
         public AuthenticatorBinding[] AuthenticatorBindings { get; set; }

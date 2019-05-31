@@ -425,7 +425,7 @@ Name | Default | Description
 Name | Default | Description
 --- | --- | ---
 **Name** | *required* | An alphanumeric  name for the object.
-**IdentityProviderBinding** | *required* | A single identity provider binding object.
+**IdentityProviderBindings** | *required* | An array of exactly one identity provider binding.
 **Host** | *required* | The frontend host name of the application. Example: `hr.contoso.com`.
 **Destination** | *required* | The URL for the backend application being proxied. Example: `http://hr.corp.contoso.com/`.
 **PathAuthOptions** | *required* | At least one path authentication option object.
