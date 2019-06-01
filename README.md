@@ -3,7 +3,9 @@
 
 [![Build Status](https://dev.azure.com/rebeagle/oakproxy/_apis/build/status/oakproxy?branchName=master)](https://dev.azure.com/rebeagle/oakproxy/_build/latest?definitionId=7&branchName=master)
 
-OAKProxy is an OAuth2 and OpenID Connect to Kerberos gateway. It allows containerized, PaaS, or otherwise non-domain clients to integrate with legacy domain systems using only HTTPS and Azure AD authentication. Neither end-user clients nor applications require connectivity to AD DS. Incoming connections are authorized with JWT bearer tokens obtained from Azure AD only. A Kerberos token is retrieved for the user identified by the JWT (using constrained delegation, S4U2Self) and used to forward the request to a backend (using S4U2Proxy). Backend applications require zero modification as the proxied request will look just like one coming from a domain-joined client. Backends can also use constrained delegation themselves.
+OAKProxy is an authentication protocol transitioning reverse proxy. It can authenticate incoming API requests with OAuth2 and web requests with OpenID Connect and transition that authentication to Kerberos, header-based auth, or JWT bearer for downstream services. It allows containerized, PaaS, or otherwise non-domain clients to integrate with legacy domain systems using only HTTPS and modern authentication. 
+
+Neither end-user clients nor applications require connectivity to AD DS. Incoming connections are authorized with JWT bearer tokens obtained from the modern identity provider. A Kerberos token is retrieved for the user identified by the JWT (using constrained delegation, S4U2Self) and used to forward the request to a backend (using S4U2Proxy). Backend applications require zero modification as the proxied request will look just like one coming from a domain-joined client. Backends can also use constrained delegation themselves.
 
 ![High-level diagram showing a function app and web app calling in to a domain environment. OAKProxy is depicted translating incoming OAuth2 to Kerberos.](docs/images/highlevel.svg)
 
@@ -30,6 +32,7 @@ Multi-Region Ingress | Deployable | No
 Open Source | Yes | No
 Service Principal KCD | Yes | No
 License Required | No | Yes
+Header-based Authentication | Yes | Wtih Ping Access
 
 # Documentation
 
@@ -497,8 +500,8 @@ Applications:
 - Name: contoso_hr
   Host: 'hr.contoso.com'
   Destination: 'http://hr.corp.contoso.com/'
-  IdentityProviderBinding:
-    Name: contoso_tenant
+  IdentityProviderBindings:
+  - Name: contoso_tenant
     ClientId: 'b40771c1-d24a-4cf4-92a8-7a7c78ac4ae7'
     AppIdUri: 'https://contoso.com/api/hr'
   AuthenticatorBindings:
@@ -512,8 +515,8 @@ Applications:
 - Name: contoso_billing
   Host: 'billing.contoso.com'
   Destination: 'http://nycbillweb001/'
-  IdentityProviderBinding:
-    Name: contoso_tenant
+  IdentityProviderBindings:
+  - Name: contoso_tenant
     ClientId: 'c18a2593-b212-4c51-874f-b83bcb12a639'
   AuthenticatorBindings:
   - Name: contoso_forest
