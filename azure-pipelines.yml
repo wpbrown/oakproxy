@@ -8,14 +8,37 @@ trigger:
     - src/OAKProxy
 
 jobs:
-- job: build_win
-  displayName: Build Windows
+- job: get_sdk_version
+  displayName: Determine SDK Version
   pool:
-    vmImage: vs2017-win2016
+    vmImage: ubuntu-16.04
   steps:
   - checkout: self
     clean: all
     fetchDepth: 1
+  - script: |
+      version=$(cat global.json | jq -r '.sdk.version')
+      echo "SDK Version from global.json is $version"
+      echo "##vso[task.setvariable variable=dotnetSdkVersion;isOutput=true]$version"
+    name: parse
+    workingDirectory: src/OAKProxy
+    displayName: Parse Version
+- job: build_win
+  dependsOn: get_sdk_version
+  displayName: Build Windows
+  pool:
+    vmImage: vs2017-win2016
+  variables:
+    dotnetSdkVersion: $[ dependencies.get_sdk_version.outputs['parse.dotnetSdkVersion'] ]
+  steps:
+  - checkout: self
+    clean: all
+    fetchDepth: 1
+  - task: UseDotNet@2
+    displayName: 'Use .NET Core SDK'
+    inputs:
+      packageType: sdk
+      version: $(dotnetSdkVersion)
   - task: NuGetCommand@2
     displayName: 'Add Azure DevOps Artifacts Credential'
     inputs:
@@ -29,13 +52,21 @@ jobs:
       artifactName: oakproxy-windows
       targetPath: src/OAKProxy/bin/Release/netcoreapp2.2/win-x64/publish
 - job: build_linux
+  dependsOn: get_sdk_version
   displayName: Build Linux
   pool:
     vmImage: ubuntu-16.04
+  variables:
+    dotnetSdkVersion: $[ dependencies.get_sdk_version.outputs['parse.dotnetSdkVersion'] ]
   steps:
   - checkout: self
     clean: all
     fetchDepth: 1
+  - task: UseDotNet@2
+    displayName: 'Use .NET Core SDK'
+    inputs:
+      packageType: sdk
+      version: $(dotnetSdkVersion)
   - task: NuGetCommand@2
     displayName: 'Remove DevOps Artifacts Source'
     inputs:
