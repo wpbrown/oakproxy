@@ -18,6 +18,10 @@ jobs:
     fetchDepth: 1
   - script: |
       version=$(cat global.json | jq -r '.sdk.version')
+      if [[ -z $version ]]; then
+        echo "Failed to get SDK version"
+        exit 1
+      fi
       echo "SDK Version from global.json is $version"
       echo "##vso[task.setvariable variable=dotnetSdkVersion;isOutput=true]$version"
     name: parse
@@ -44,7 +48,9 @@ jobs:
     inputs:
       command: custom
       arguments: sources update -Name corefx-s4u -Username vsts -Password "$(System.AccessToken)" -StorePasswordInClearText -ConfigFile src/OAKProxy/Nuget.Config
-  - script: dotnet publish -c Release -f netcoreapp2.2 -r win-x64 --self-contained true
+  - script: |
+      dotnet --version
+      dotnet publish -c Release -f netcoreapp2.2 -r win-x64 --self-contained true
     workingDirectory: src/OAKProxy
     displayName: Build
   - task: PublishPipelineArtifact@0
@@ -72,7 +78,9 @@ jobs:
     inputs:
       command: custom
       arguments: sources remove -Name corefx-s4u -ConfigFile src/OAKProxy/NuGet.Config
-  - script: dotnet publish -c Release -f netcoreapp2.2 -r linux-x64 --self-contained false
+  - script: |
+      dotnet --version
+      dotnet publish -c Release -f netcoreapp2.2 -r linux-x64 --self-contained false
     workingDirectory: src/OAKProxy
     displayName: Build
   - task: PublishPipelineArtifact@0
