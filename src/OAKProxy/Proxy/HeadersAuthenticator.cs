@@ -61,7 +61,7 @@ namespace OAKProxy.Proxy
                     var match = referenceRegex.Match(line);
                     if (match.Success)
                     {
-                        assemblies.Add(match.Groups[0].Value);
+                        assemblies.Add(match.Groups[1].Value);
                     }
                     else
                     {
