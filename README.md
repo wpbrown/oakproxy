@@ -3,7 +3,7 @@
 
 [![Build Status](https://dev.azure.com/rebeagle/oakproxy/_apis/build/status/oakproxy?branchName=master)](https://dev.azure.com/rebeagle/oakproxy/_build/latest?definitionId=7&branchName=master)
 
-OAKProxy is an authentication protocol transitioning reverse proxy. It can authenticate incoming API requests with OAuth2 and web requests with OpenID Connect and transition that authentication to Kerberos, header-based auth, or JWT bearer for downstream services. It allows containerized, PaaS, or otherwise non-domain clients to integrate with legacy domain systems using only HTTPS and modern authentication. 
+OAKProxy is an authentication protocol transitioning reverse proxy. It can authenticate incoming API requests with OAuth2 and web requests with OpenID Connect and transition that authentication to Kerberos, header-based authentication, or JWT bearer for downstream services. It allows containerized, PaaS, or otherwise non-domain clients to integrate with legacy domain systems using only HTTPS and modern authentication. 
 
 Neither end-user clients nor applications require connectivity to AD DS. Incoming connections are authorized with JWT bearer tokens obtained from the modern identity provider. A Kerberos token is retrieved for the user identified by the JWT (using constrained delegation, S4U2Self) and used to forward the request to a backend (using S4U2Proxy). Backend applications require zero modification as the proxied request will look just like one coming from a domain-joined client. Backends can also use constrained delegation themselves.
 
@@ -32,7 +32,7 @@ Multi-Region Ingress | Deployable | No
 Open Source | Yes | No
 Service Principal KCD | Yes | No
 License Required | No | Yes
-Header-based Authentication | Yes | Wtih Ping Access
+Header-based Authentication | Yes | With Ping Access
 
 # Documentation
 
@@ -392,7 +392,7 @@ Configuration | *optional* | Configuration of ASP.NET Core subsystems.
 
 Name | Default | Description
 --- | --- | ---
-**Urls** | *required* | Specifies the scheme, interfaces, and ports to listen on. Production deployments of OAKProxy must use HTTPS, however, it is may be terminated before the OAKProxy server. Example: `http://*` listens on all intefaces on port 80. [More information](https://docs.microsoft.com/en-us/aspnet/core/fundamentals/host/web-host?view=aspnetcore-2.2#server-urls).
+**Urls** | *required* | Specifies the scheme, interfaces, and ports to listen on. Production deployments of OAKProxy must use HTTPS, however, it is may be terminated before the OAKProxy server. Example: `http://*` listens on all interfaces on port 80. [More information](https://docs.microsoft.com/en-us/aspnet/core/fundamentals/host/web-host?view=aspnetcore-2.2#server-urls).
 UseForwardedHeaders | `false` | Use scheme, host, and port headers forwarded by a reverse proxy. [More information](https://docs.microsoft.com/en-us/aspnet/core/host-and-deploy/proxy-load-balancer?view=aspnetcore-2.2).
 LogLevel | `Information` | Log verbosity. [Valid values](https://docs.microsoft.com/en-us/aspnet/core/fundamentals/logging/?view=aspnetcore-2.2#log-level).
 ApplicationInsightsKey | *optional* | If provided, OAKProxy will feed information to [Azure Application Insights](https://docs.microsoft.com/en-us/azure/azure-monitor/app/app-insights-overview).
@@ -422,6 +422,23 @@ Name | Default | Description
 --- | --- | ---
 **ObjectId** | *required* | The object ID of the Azure AD service principal (_not_ the application object ID or app ID).
 **UserPrincipalName** | *required*  | The AD DS UPN of the user, computer, or service account to impersonate.
+
+### Headers Authenticator Object
+
+Name | Default | Description
+--- | --- | ---
+**Type** | *required* | Must be `Headers`.
+**Name** | *required* | An alphanumeric  name for the object.
+**HeaderDefinitions** | *required* | An array of at least one header definition objects. 
+
+### Headers Definition Object
+
+Name | Default | Description
+--- | --- | ---
+**HeaderName** | *required* | An alphanumeric  name for the object.
+ClaimName | *optional* | The name of a claim in the incoming JWT that will supply the value of the header. *One of either ClaimName or Expression is required.*
+Expression  | *optional* | An expression that returns the string value of the header. See [header expressions](#header-expressions) for more details *One of either ClaimName or Expression is required.*
+Required | `false` | When `true`, if using ClaimName, fail the request if the named claim is not in the JWT. If using Expression, fail the request if the expression returns `null` or throws an exception.
 
 ### Application Object
 
@@ -468,6 +485,42 @@ Host | *optional* | Configure [WebHost](https://docs.microsoft.com/en-us/aspnet/
 ForwardedHeaders | *optional* | Configure [forwarded headers](https://docs.microsoft.com/en-us/aspnet/core/host-and-deploy/proxy-load-balancer?view=aspnetcore-2.2#forwarded-headers-middleware-options) middleware.
 Kestrel | *optional* | Configure [Kestrel](https://docs.microsoft.com/en-us/aspnet/core/fundamentals/servers/kestrel?view=aspnetcore-2.2#endpoint-configuration) settings.
 ApplicationInsights | *optional* | Configure [Application Insights](https://docs.microsoft.com/en-us/azure/azure-monitor/app/asp-net-core#configuring-using-applicationinsightsserviceoptions) middleware.
+
+## Header Expressions
+
+Header expressions are C# code snippets that transform incoming claims. The incoming JWT claims are available in a dictionary named `c`. They keys and values are strings. The simplest expression is a constant string:
+```csharp
+"value is always this"
+```
+
+Claims can be returned unmodified (which is the same as using `ClaimName` in the header definition instead of `Expression`):
+```csharp
+c["aud"]
+```
+
+Any valid C# expression is allowed:
+```csharp
+$"Audience: {c["aud"]} Issuer: {c["iss"]}"
+```
+
+Multiline expressions can be used to write complex functions:
+```csharp
+string objectId = c["oid"];
+return objectId.ToUpper();
+```
+
+Assemblies can be referenced in a multiline expression:
+```csharp
+#r "System.Net"
+
+using System.Net;
+using System.Text.RegularExpressions;
+
+var gratuitousRegex = new Regex(@"\w{4}$");
+string oidClaim = c["oid"];
+Match match = gratuitousRegex.Match(oidClaim);
+return match.Success ? match.Value : IPAddress.IPv6Loopback.ToString();
+```
 
 ## Example Configuration
 
