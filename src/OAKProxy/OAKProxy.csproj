@@ -21,7 +21,9 @@
     <PackageReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.AzureAD.UI" Version="2.2.0" />
     <PackageReference Include="Microsoft.AspNetCore.Hosting.WindowsServices" Version="2.2.0" />
+    <PackageReference Include="Microsoft.Azure.Services.AppAuthentication" Version="1.2.0-preview3" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Scripting" Version="3.1.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.AzureKeyVault" Version="2.2.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.EventLog" Version="2.2.0" />
     <PackageReference Include="NetEscapades.Configuration.Yaml" Version="1.6.0" />
     <PackageReference Include="System.DirectoryServices.AccountManagement" Version="4.5.0" />

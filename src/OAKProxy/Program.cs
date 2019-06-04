@@ -16,6 +16,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.InteropServices;
 
 namespace OAKProxy
 {
@@ -34,9 +35,7 @@ namespace OAKProxy
             bool useTcb = args.Contains("-tcb");
             if (isService)
             {
-                var pathToExe = Process.GetCurrentProcess().MainModule.FileName;
-                var pathToContentRoot = Path.GetDirectoryName(pathToExe);
-                Directory.SetCurrentDirectory(pathToContentRoot);
+                Directory.SetCurrentDirectory(GetExecutableDirectory());
             }
             else
             {
@@ -71,7 +70,7 @@ namespace OAKProxy
                 .ConfigureAppConfiguration((hostingContext, config) =>
                 {
                     var env = hostingContext.HostingEnvironment;
-                    SetupConfiguration(config, env.EnvironmentName, reload: true);
+                    SetupConfiguration(config, hostConfig, reload: true);
                 })
                 .ConfigureLogging((hostingContext, logging) =>
                 {
@@ -114,16 +113,83 @@ namespace OAKProxy
                 .UseStartup<Startup>();
         }
 
-        private static IConfigurationBuilder SetupConfiguration(IConfigurationBuilder builder, string environment = null, bool reload = false)
+        private static IConfigurationBuilder SetupConfiguration(IConfigurationBuilder builder, IConfiguration hostConfiguration = null, bool reload = false)
         {
-            builder.AddYamlFile("oakproxy.yml", optional: true, reloadOnChange: reload);
-                   
-            if (!String.IsNullOrEmpty(environment))
+            const string nameBase = "oakproxy";
+            const string configFileExtension = "yml";
+            const string configMapDirectoryName = "config";
+            string configFileName = $"{nameBase}.{configFileExtension}";
+
+            string configDirectory = Path.Combine(
+                RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ?
+                    Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData, Environment.SpecialFolderOption.DoNotVerify) : 
+                    "/etc",
+                nameBase);
+
+            // The central config file
+            string configFile = Path.Combine(configDirectory, configFileName);
+            if (File.Exists(configFile))
             {
-                builder.AddYamlFile($"oakproxy.{environment}.yml", optional: true, reloadOnChange: reload);
+                builder.AddYamlFile(configFile, optional: false, reloadOnChange: reload);
             }
 
+            // The central config map directory
+            string configMapDirectory = Path.Combine(configDirectory, configMapDirectoryName);
+            if (Directory.Exists(configMapDirectory))
+            {
+                builder.AddKeyPerFile(configMapDirectory, optional: false);
+            }
+
+            // The local config file
+            string localConfigFile = Path.Combine(GetExecutableDirectory(), configFileName);
+            if (File.Exists(localConfigFile))
+            {
+                builder.AddYamlFile(localConfigFile, optional: false, reloadOnChange: reload);
+            }
+
+            // The current directory config file
+            string workingConfigFile = Path.Combine(Directory.GetCurrentDirectory(), configFileName);
+            if (File.Exists(workingConfigFile))
+            {
+                builder.AddYamlFile(workingConfigFile, optional: false, reloadOnChange: reload);
+            }
+
+            // Azure Key Vault
+            var keyVaultSection = hostConfiguration?.GetSection("Server:KeyVault");
+            if (keyVaultSection != null && keyVaultSection.Exists())
+            {
+                var options = new KeyVaultOptions(keyVaultSection);
+                var vaultUri = options.Name.StartsWith("https", StringComparison.InvariantCultureIgnoreCase) ?
+                    options.Name : $"https://{options.Name}.vault.azure.net/";
+
+                if (options.ClientId == null)
+                {
+                    // Use Managed Identity
+                    builder.AddAzureKeyVault(vaultUri);
+                }
+                else
+                {
+                    if (options.ClientSecret != null)
+                    {
+                        builder.AddAzureKeyVault(vaultUri, options.ClientId, options.ClientSecret);
+                    }
+                    else if (options.Certificate != null)
+                    {
+                        builder.AddAzureKeyVault(vaultUri, options.ClientId, options.Certificate);
+                    }
+                }
+            }
+
+            // Environment
+            builder.AddEnvironmentVariables("O_");
+
             return builder;
+        }
+
+        private static string GetExecutableDirectory()
+        {
+            var pathToExe = Process.GetCurrentProcess().MainModule.FileName;
+            return Path.GetDirectoryName(pathToExe);
         }
 
         private static void ConfigureProcessPrivileges(ILogger logger, bool useTcb)

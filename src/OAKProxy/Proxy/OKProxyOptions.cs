@@ -1,10 +1,12 @@
 ﻿using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
+using System.Security.Cryptography.X509Certificates;
 
 namespace OAKProxy.Proxy
 {
@@ -257,5 +259,58 @@ namespace OAKProxy.Proxy
     {
         Kerberos,
         Headers
+    }
+
+    public class KeyVaultOptions
+    {
+        public KeyVaultOptions(IConfiguration configuration)
+        {
+            configuration.Bind(this);
+
+            var certificateSection = configuration.GetSection("Certificate");
+            if (certificateSection.Exists())
+            {
+                if (certificateSection["Path"] != null)
+                {
+                    var certificateOptions = certificateSection.Get<CertificateFileOptions>();
+                    Certificate = new X509Certificate2(certificateOptions.Path, certificateOptions.Password);
+                }
+                else if (certificateSection["Subject"] != null)
+                {
+                    var certificateOptions = certificateSection.Get<CertificateStoreOptions>();
+                    Certificate = Microsoft.AspNetCore.Server.Kestrel.Https.Internal.CertificateLoader
+                        .LoadFromStoreCert(certificateOptions.Subject, 
+                            certificateOptions.Store, 
+                            certificateOptions.Location, 
+                            certificateOptions.AllowInvalid);
+                }
+            }
+        }
+
+        public string Name { get; set; }
+
+        public string ClientId { get; set; }
+
+        public string ClientSecret { get; set; }
+
+        public X509Certificate2 Certificate { get; private set; }
+    }
+
+    public class CertificateFileOptions
+    {
+        public string Path { get; set; }
+
+        public string Password { get; set; }
+    }
+
+    public class CertificateStoreOptions
+    {
+        public string Subject { get; set; }
+
+        public string Store { get; set; }
+
+        public StoreLocation Location { get; set; }
+
+        public bool AllowInvalid { get; set; }
     }
 }
