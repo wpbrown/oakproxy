@@ -1,6 +1,6 @@
 ﻿<Project>
   <PropertyGroup>
-    <Version>0.1.1</Version>
+    <Version>0.1.2</Version>
     <FileVersion Condition=" '$(BUILD_BUILDID)' == '' ">developer</FileVersion>
     <FileVersion Condition=" '$(BUILD_BUILDID)' != '' ">pipeline-$(BUILD_BUILDID)</FileVersion>
   </PropertyGroup>

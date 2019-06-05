@@ -70,11 +70,14 @@ Header-based Authentication | Yes | With Ping Access
     - [Azure AD Identity Provider Object](#azure-ad-identity-provider-object)
     - [Kerberos Authenticator Object](#kerberos-authenticator-object)
     - [Service Principal Mapping Object](#service-principal-mapping-object)
+    - [Headers Authenticator Object](#headers-authenticator-object)
+    - [Headers Definition Object](#headers-definition-object)
     - [Application Object](#application-object)
     - [Path Authentication Option Object](#path-authentication-option-object)
     - [Azure AD Identity Provider Binding Object](#azure-ad-identity-provider-binding-object)
     - [Kerberos Authenticator Binding Object](#kerberos-authenticator-binding-object)
     - [Subsystem Configuration](#subsystem-configuration)
+  - [Header Expressions](#header-expressions)
   - [Example Configuration](#example-configuration)
     - [HTTPS](#https)
 - [Troubleshooting](#troubleshooting)
@@ -376,7 +379,16 @@ The session ID claim is required for the proxy to validate remote logout attempt
 
 # OAKProxy Configuration
 
-All configuration is done with an `oakproxy.yml` file in the installation directory.
+Configuration is loaded from the following locations in order of precedence with the first being highest precedence:
+
+Source | Description
+--- | --- 
+Environment Variables | Environment must be prefixed with `O_`. Environment variables use `__` as a separator. Example: `O_Server__Urls`.
+Azure Key Vault | If Azure Key Vault is configured. Key Vault use separator `--`. For example: to configure the ClientSecret for the first identity provider binding in the first application name the secret: `Applications--0--IdentityProviderBindings--0--ClientSecret`.
+Working Directory YAML | `oakproxy.yml` if it exists in the current working directory.
+Installation Directory YAML | `oakproxy.yml` if it exists in the directory where the OAKProxy executable is installed.
+Key Per File Directory | Each file in the directory represents a key and the content of the file is the value. This uses `__` as a separator. The directory is `/etc/oakproxy/config` on Linux and typically `C:\ProgramData\oakproxy\config` on Windows. This supports using Kubernetes ConfigMaps and Secrets.
+Configuration Directory YAML | `oakproxy.yml` if it exists in the system configuration directory: `/etc/oakproxy` on Linux and typically `C:\ProgramData\oakproxy` on Windows.
 
 ## Configuration File Schema
 
@@ -397,6 +409,32 @@ UseForwardedHeaders | `false` | Use scheme, host, and port headers forwarded by 
 LogLevel | `Information` | Log verbosity. [Valid values](https://docs.microsoft.com/en-us/aspnet/core/fundamentals/logging/?view=aspnetcore-2.2#log-level).
 ApplicationInsightsKey | *optional* | If provided, OAKProxy will feed information to [Azure Application Insights](https://docs.microsoft.com/en-us/azure/azure-monitor/app/app-insights-overview).
 EnableHealthChecks | `false` | Listen at `/.oakproxy/health` for health probes from gateways/load-balancers.
+KeyVault | *optional* | A single Azure Key Vault object.
+
+### Azure Key Vault Object
+
+Name | Default | Description
+--- | --- | ---
+**Name** | *required* | The name of the Azure Key Vault (or the full URL).
+ClientId | *optional* | The client ID used for authentication. If provided, `ClientSecret` or `Certificate` is required. If not provided, Manage Identity of the Azure resource the application is running on will be used. If a Managed Identity is not enabled  an error will be thrown.
+ClientSecret | *optional* | The client secret used for authentication. *Either ClientSecret or Certificate is required if ClientId is provided*.
+Certificate | *optional* | A single certificate object used for authentication. *Either ClientSecret or Certificate is required if ClientId is provided*.
+
+### Certificate File Object
+
+Name | Default | Description
+--- | --- | ---
+**Path** | *required* | The path and file name of a certificate file.
+**Password** | *required* | The password required to access the X.509 certificate data.
+
+### Certificate Store Reference Object
+
+Name | Default | Description
+--- | --- | ---
+**Subject** | *required* | The name of the Azure Key Vault (or the full URL).
+**Store** | *required* | The certificate store from which to load the certificate. Example: `My`.
+Location | `CurrentUser` | The store location to load the certificate from. 
+AllowInvalid | `false` | Set to `true` to permit the use of invalid certificates (for example, self-signed certificates).
 
 ### Azure AD Identity Provider Object
 
@@ -534,6 +572,8 @@ Server:
   UseForwardedHeaders: true
   ApplicationInsightsKey: '0a8c3e94-ce34-4a4e-81cb-9c7261cd3cb6'
   EnableHealthChecks: true
+  KeyVault:
+    Name: contoso-oakproxy-kv
   
 IdentityProviders:
 - Name: contoso_tenant
@@ -548,6 +588,19 @@ Authenticators:
   ServicePrincipalMappings:
   - ObjectId: 'b40771c1-d24a-4cf4-92a8-7a7c78ac4ae7'
     UserPrincipalName: 'xsazrbill@corp.contoso.com'
+- Name: header_test
+  Type: Headers
+  HeaderDefinitions:
+  - HeaderName: 'X-ObjectId'
+    ClaimName: oid
+    Required: true
+  - HeaderName: 'X-IssuerMsg'
+    Expression: |
+      string message = $"Multiline expression definition for issuer: {c["iss"]}";
+      return message.ToUpper();
+    Required: false
+  - HeaderName: 'Constant'
+    Expression: "always this"
 
 Applications:
 - Name: contoso_hr
@@ -577,6 +630,17 @@ Applications:
   - Path: ''
     Mode: Web
   WebRequireRoleClaim: true
+- Name: contoso_ratecard
+  Host: 'ratecard.contoso.com'
+  Destination: 'https://ratecard.central.corp.contoso.com/'
+  AuthenticatorBindings:
+  - Name: header_test
+  IdentityProviderBindings:
+  - Name: contoso_tenant
+    ClientId: b9629d88-77c2-3352-9bb9-f9fad28c5324
+  PathAuthOptions:
+  - Path: ""
+    Mode: web
 
 Configuration:
   ForwardedHeaders:
