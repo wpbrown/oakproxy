@@ -15,7 +15,6 @@ jobs:
   steps:
   - checkout: self
     clean: all
-    fetchDepth: 1
   - script: |
       version=$(cat global.json | jq -r '.sdk.version')
       if [[ -z $version ]]; then
@@ -31,13 +30,12 @@ jobs:
   dependsOn: get_sdk_version
   displayName: Build Windows
   pool:
-    vmImage: vs2017-win2016
+    vmImage: windows-2019
   variables:
     dotnetSdkVersion: $[ dependencies.get_sdk_version.outputs['parse.dotnetSdkVersion'] ]
   steps:
   - checkout: self
     clean: all
-    fetchDepth: 1
   - task: UseDotNet@2
     displayName: 'Use .NET Core SDK'
     inputs:
@@ -67,7 +65,6 @@ jobs:
   steps:
   - checkout: self
     clean: all
-    fetchDepth: 1
   - task: UseDotNet@2
     displayName: 'Use .NET Core SDK'
     inputs:

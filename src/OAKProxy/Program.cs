@@ -31,8 +31,9 @@ namespace OAKProxy
             var title = assembly.GetCustomAttribute<AssemblyTitleAttribute>().Title;
             var banner = $"Starting {title} version {version} build {build}.";
 
-            bool isService = args.Contains("-service");
-            bool useTcb = args.Contains("-tcb");
+            bool isWindows = IsWindows();
+            bool isService = isWindows && args.Contains("-service");
+            
             if (isService)
             {
                 Directory.SetCurrentDirectory(GetExecutableDirectory());
@@ -46,7 +47,11 @@ namespace OAKProxy
             var logger = webHost.Services.GetRequiredService<ILogger<Program>>();
             logger.LogInformation(banner);
 
-            ConfigureProcessPrivileges(logger, useTcb);
+            if (isWindows)
+            {
+                bool useTcb = args.Contains("-tcb");
+                ConfigureProcessPrivileges(logger, useTcb);
+            }
 
             if (isService)
             {
@@ -113,6 +118,11 @@ namespace OAKProxy
                 .UseStartup<Startup>();
         }
 
+        private static bool IsWindows()
+        {
+            return RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+        }
+
         private static IConfigurationBuilder SetupConfiguration(IConfigurationBuilder builder, IConfiguration hostConfiguration = null, bool reload = false)
         {
             const string nameBase = "oakproxy";
@@ -121,7 +131,7 @@ namespace OAKProxy
             string configFileName = $"{nameBase}.{configFileExtension}";
 
             string configDirectory = Path.Combine(
-                RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ?
+                IsWindows() ?
                     Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData, Environment.SpecialFolderOption.DoNotVerify) : 
                     "/etc",
                 nameBase);
