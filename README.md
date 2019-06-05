@@ -387,8 +387,8 @@ Environment Variables | Environment must be prefixed with `O_`. Environment vari
 Azure Key Vault | If Azure Key Vault is configured. Key Vault use separator `--`. For example: to configure the ClientSecret for the first identity provider binding in the first application name the secret: `Applications--0--IdentityProviderBindings--0--ClientSecret`.
 Working Directory YAML | `oakproxy.yml` if it exists in the current working directory.
 Installation Directory YAML | `oakproxy.yml` if it exists in the directory where the OAKProxy executable is installed.
-Key Per File Directory | Each file in the directory represents a key and the content of the file is the value. This uses `__` as a separator. The directory is `/etc/oakproxy/config` on Linux and typically `C:\ProgramData\oakproxy\config` on Windows. This supports using Kubernetes ConfigMaps and Secrets.
-Configuration Directory YAML | `oakproxy.yml` if it exists in the system configuration directory: `/etc/oakproxy` on Linux and typically `C:\ProgramData\oakproxy` on Windows.
+Key Per File Directory | Each file in the directory represents a key and the content of the file is the value. This uses `__` as a separator. The directory is `/etc/oakproxy/config` on Linux and typically `C:\ProgramData\oakproxy\config` on Windows or `C:\oakproxy\config` in a Windows Container. This supports using Kubernetes ConfigMaps and Secrets.
+Configuration Directory YAML | `oakproxy.yml` if it exists in the system configuration directory: `/etc/oakproxy` on Linux and typically `C:\ProgramData\oakproxy` on Windows or `C:\oakproxy` in a Windows Container.
 
 ## Configuration File Schema
 
