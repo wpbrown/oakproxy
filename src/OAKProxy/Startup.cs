@@ -250,8 +250,7 @@ namespace OAKProxy
                 return;
             }
 
-            // Warm up the authentication provider service before first request
-            Task.Run(() => app.ApplicationServices.GetService<IAuthenticatorProvider>());
+            var authenticatorWarmup = Task.Run(() => app.ApplicationServices.GetService<IAuthenticatorProvider>());
 
             if (_options.Server.EnableHealthChecks)
                 app.UseHealthChecks(ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.Health));
@@ -264,6 +263,8 @@ namespace OAKProxy
             app.Map(ProxyMetaEndpoints.PathBase, ConfigureMetaPath);
             app.UsePolicyEvaluation();
             app.RunProxy();
+
+            authenticatorWarmup.Wait();
         }
 
         private void ConfigureMetaPath(IApplicationBuilder app)
