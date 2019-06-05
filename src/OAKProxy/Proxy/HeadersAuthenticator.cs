@@ -37,8 +37,16 @@ namespace OAKProxy.Proxy
                 if (!applicator.UseBasicClaim)
                 {
                     (var scriptOptions, var scriptText) = ParseExpression(d.Expression);
-                    var script = CSharpScript.Create<string>(scriptText, scriptOptions, typeof(ExpressionGlobals));
-                    applicator.ExpressionRunner = script.CreateDelegate();
+                    try
+                    {
+                        var script = CSharpScript.Create<string>(scriptText, scriptOptions, typeof(ExpressionGlobals));
+                        applicator.ExpressionRunner = script.CreateDelegate();
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogCritical($"Failed to compile expresion for header: {applicator.Definition.HeaderName}. {ex.Message}");
+                        throw;
+                    }
                 }
 
                 return applicator;
