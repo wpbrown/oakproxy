@@ -19,7 +19,7 @@ namespace OAKProxy.Proxy
 
             foreach (var application in options.Value.Applications)
             {
-                _authenticators[application.Name] = application.AuthenticatorBindings.Select(b =>
+                _authenticators[application.Name] = application.AuthenticatorBindings?.Select(b =>
                 {
                     if (!singleInstances.TryGetValue(b.Name, out var authenticator))
                     {
@@ -28,7 +28,7 @@ namespace OAKProxy.Proxy
                         singleInstances[b.Name] = authenticator;
                     }
                     return authenticator;
-                }).ToArray();
+                }).ToArray() ?? new IAuthenticator[] { } ;
             }
         }
 
