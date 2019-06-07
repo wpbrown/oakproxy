@@ -123,49 +123,63 @@ namespace OAKProxy
                             options.SignedOutCallbackPath = ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.SignedOutCallback);
                         });
                 }
+            }
 
-                services.Configure<JwtBearerOptions>(schemes.JwtBearerName, options =>
+            // Additional configuration is done after all AzureAD configuration due to a bug fixed in ASP.NET Core 3.0:
+            // https://github.com/aspnet/AspNetCore/commit/23c528c176e654e14cf5d078558420e00154d0e6
+            // Remerge this logic to the loop above after 3.0.
+            foreach (var application in _options.Applications)
+            {
+                var schemes = ProxyAuthComponents.GetAuthSchemes(application);
+
+                if (application.HasPathMode(PathAuthOptions.AuthMode.Api))
                 {
-                    options.TokenValidationParameters.ValidAudiences = new string[] { application.IdentityProviderBinding.AppIdUri };
-                    options.TokenValidationParameters.AuthenticationType = ProxyAuthComponents.ApiAuth;
-                    options.TokenValidationParameters.RoleClaimType = AzureADClaims.Roles;
-                    options.TokenValidationParameters.NameClaimTypeRetriever = (token, _) =>
+                    services.Configure<JwtBearerOptions>(schemes.JwtBearerName, options =>
                     {
-                        var jwtToken = (JwtSecurityToken)token;
-                        return jwtToken.Claims.Any(c => c.ValueType == AzureADClaims.UserPrincipalName) ?
-                            AzureADClaims.UserPrincipalName : AzureADClaims.ObjectId;
-                    };
+                        options.TokenValidationParameters.ValidAudiences = new string[] { application.IdentityProviderBinding.AppIdUri };
+                        options.TokenValidationParameters.AuthenticationType = ProxyAuthComponents.ApiAuth;
+                        options.TokenValidationParameters.RoleClaimType = AzureADClaims.Roles;
+                        options.TokenValidationParameters.NameClaimTypeRetriever = (token, _) =>
+                        {
+                            var jwtToken = (JwtSecurityToken)token;
+                            return jwtToken.Claims.Any(c => c.ValueType == AzureADClaims.UserPrincipalName) ?
+                                AzureADClaims.UserPrincipalName : AzureADClaims.ObjectId;
+                        };
 
-                    options.SecurityTokenValidators.Clear();
-                    options.SecurityTokenValidators.Add(new JwtSecurityTokenHandler
-                    {
-                        MapInboundClaims = false
+                        options.SecurityTokenValidators.Clear();
+                        options.SecurityTokenValidators.Add(new JwtSecurityTokenHandler
+                        {
+                            MapInboundClaims = false
+                        });
                     });
-                });
+                }
 
-                services.Configure<CookieAuthenticationOptions>(schemes.CookieName, options =>
+                if (application.HasPathMode(PathAuthOptions.AuthMode.Web))
                 {
-                    options.AccessDeniedPath = ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.AccessDenied);
-                    options.Cookie.SameSite = application.SessionCookieSameSiteMode ?? SameSiteMode.Lax;
-                    options.Cookie.Name = $"{ProxyAuthComponents.CookiePrefix}.{ProxyAuthComponents.AuthCookieId}.{application.Name}";
-                });
-
-                services.Configure<OpenIdConnectOptions>(schemes.OpenIdName, options =>
-                {
-                    options.ClaimActions.DeleteClaims("aio", "family_name", "given_name", "name", "sub", "tid", "unique_name", "uti");
-
-                    options.TokenValidationParameters.AuthenticationType = ProxyAuthComponents.WebAuth;
-                    options.TokenValidationParameters.RoleClaimType = AzureADClaims.Roles;
-                    options.TokenValidationParameters.NameClaimType = AzureADClaims.UserPrincipalName;
-                    options.RemoteSignOutPath = ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.RemoteSignOut);
-                    options.ResponseType = application.IdentityProviderBinding.DisableImplicitIdToken ? 
-                        OpenIdConnectResponseType.Code : OpenIdConnectResponseType.IdToken;
-
-                    options.SecurityTokenValidator = new JwtSecurityTokenHandler
+                    services.Configure<CookieAuthenticationOptions>(schemes.CookieName, options =>
                     {
-                        MapInboundClaims = false
-                    };
-                });
+                        options.AccessDeniedPath = ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.AccessDenied);
+                        options.Cookie.SameSite = application.SessionCookieSameSiteMode ?? SameSiteMode.Lax;
+                        options.Cookie.Name = $"{ProxyAuthComponents.CookiePrefix}.{ProxyAuthComponents.AuthCookieId}.{application.Name}";
+                    });
+
+                    services.Configure<OpenIdConnectOptions>(schemes.OpenIdName, options =>
+                    {
+                        options.ClaimActions.DeleteClaims("aio", "family_name", "given_name", "name", "sub", "tid", "unique_name", "uti");
+
+                        options.TokenValidationParameters.AuthenticationType = ProxyAuthComponents.WebAuth;
+                        options.TokenValidationParameters.RoleClaimType = AzureADClaims.Roles;
+                        options.TokenValidationParameters.NameClaimType = AzureADClaims.UserPrincipalName;
+                        options.RemoteSignOutPath = ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.RemoteSignOut);
+                        options.ResponseType = application.IdentityProviderBinding.DisableImplicitIdToken ?
+                            OpenIdConnectResponseType.Code : OpenIdConnectResponseType.IdToken;
+
+                        options.SecurityTokenValidator = new JwtSecurityTokenHandler
+                        {
+                            MapInboundClaims = false
+                        };
+                    });
+                }
             }
         }
 
@@ -220,16 +234,13 @@ namespace OAKProxy
             {
                 services.AddHttpClient(application.Name).ConfigureHttpMessageHandlerBuilder(builder =>
                 {
-                    var primaryHandler = new HttpClientHandler
-                    {
-                        AllowAutoRedirect = false,
-                        UseCookies = false,
-                        UseProxy = false
-                    };
-
+                    var proxyBuilder = new ProxyMessageHandlerBuilder(builder);
+                   
                     var authenticatorProvider = builder.Services.GetService<IAuthenticatorProvider>();
                     foreach (var authenticator in authenticatorProvider[application.Name])
-                        authenticator.Configure(builder);
+                        authenticator.Configure(proxyBuilder);
+
+                    proxyBuilder.PostConfigure();
                 })
                 .ConfigureHttpClient(client => {
                     client.BaseAddress = application.Destination;

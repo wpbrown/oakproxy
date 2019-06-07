@@ -17,6 +17,7 @@
     <Content Update="oakproxy*.yml" CopyToPublishDirectory="Never" />
     <Content Update="Nuget.Config" CopyToPublishDirectory="Never" />
     <Content Include="OAKProxy.psm1" CopyToPublishDirectory="Always" />
+    <!-- Held ApplicationInsights package at 2.7.0-beta3 because of this bug: https://github.com/microsoft/ApplicationInsights-aspnetcore/issues/897 -->
     <PackageReference Include="Microsoft.ApplicationInsights.AspNetCore" Version="2.7.0-beta3" />
     <PackageReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.AzureAD.UI" Version="2.2.0" />

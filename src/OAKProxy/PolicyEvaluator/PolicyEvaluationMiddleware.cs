@@ -26,12 +26,18 @@ namespace OAKProxy.PolicyEvaluator
         public async Task Invoke(HttpContext context, IProxyApplicationService applicationService, IPolicyEvaluator policyEvaluator)
         {
             var activeApplication = applicationService.GetActiveApplication();
-            var mode = context.Request.PathBase == "/.oakproxy" ? PathAuthOptions.AuthMode.Web :
+            var mode = context.Request.PathBase == ProxyMetaEndpoints.PathBase ? PathAuthOptions.AuthMode.Web :
                 activeApplication.GetPathMode(context.Request.Path);
             if (!mode.HasValue)
             {
                 context.Response.StatusCode = (int)HttpStatusCode.Forbidden;
                 context.SetErrorDetail(Errors.Code.UnconfiguredPath, "Path has no authentication method configured.");
+                return;
+            }
+
+            if (mode == PathAuthOptions.AuthMode.None)
+            {
+                await _next(context);
                 return;
             }
 

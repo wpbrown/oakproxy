@@ -147,10 +147,13 @@ namespace OAKProxy.Proxy
         }
     }
 
-    public class AuthenticatorBinding
+    public class AuthenticatorBindingOptionsBase
     {
         [Required]
         public string Name { get; set; }
+
+        // Headers
+        public bool SendAnonymousRequestAsService { get; set; }
     }
 
     public class ServerOptions
@@ -182,7 +185,7 @@ namespace OAKProxy.Proxy
         public IdentityProviderBinding[] IdentityProviderBindings { get; set; }
 
         [ValidateCollection]
-        public AuthenticatorBinding[] AuthenticatorBindings { get; set; }
+        public AuthenticatorBindingOptionsBase[] AuthenticatorBindings { get; set; }
 
         [Required]
         public HostString? Host { get; set; }
@@ -238,6 +241,7 @@ namespace OAKProxy.Proxy
 
         public enum AuthMode
         {
+            None,
             Web,
             Api
         }

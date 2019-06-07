@@ -36,6 +36,7 @@ Header-based Authentication | Yes | With Ping Access
 
 # Documentation
 
+- [Documentation](#documentation)
 - [Security](#security)
   - [Mitigation](#mitigation)
 - [OAuth2](#oauth2)
@@ -67,6 +68,9 @@ Header-based Authentication | Yes | With Ping Access
 - [OAKProxy Configuration](#oakproxy-configuration)
   - [Configuration File Schema](#configuration-file-schema)
     - [Server Object](#server-object)
+    - [Azure Key Vault Object](#azure-key-vault-object)
+    - [Certificate File Object](#certificate-file-object)
+    - [Certificate Store Reference Object](#certificate-store-reference-object)
     - [Azure AD Identity Provider Object](#azure-ad-identity-provider-object)
     - [Kerberos Authenticator Object](#kerberos-authenticator-object)
     - [Service Principal Mapping Object](#service-principal-mapping-object)
@@ -76,6 +80,7 @@ Header-based Authentication | Yes | With Ping Access
     - [Path Authentication Option Object](#path-authentication-option-object)
     - [Azure AD Identity Provider Binding Object](#azure-ad-identity-provider-binding-object)
     - [Kerberos Authenticator Binding Object](#kerberos-authenticator-binding-object)
+    - [Headers Authenticator Binding Object](#headers-authenticator-binding-object)
     - [Subsystem Configuration](#subsystem-configuration)
   - [Header Expressions](#header-expressions)
   - [Example Configuration](#example-configuration)
@@ -497,7 +502,7 @@ SessionCookieSameSiteMode | `Lax` | The SameSite mode to use for the OpenID Conn
 Name | Default | Description
 --- | --- | ---
 **Path** | *required* | The path within the application. Example: `/api`. An empty string `Path: ''`, matches all paths.
-**Mode** | *required* | The authentication mode to accept: `Web` (OpenID Connect) or `API` (JWT Bearer).
+**Mode** | *required* | The authentication mode to accept: `Web` (OpenID Connect), `API` (JWT Bearer), or `None` to perform no authN/authZ.
 
 ### Azure AD Identity Provider Binding Object
 
@@ -514,6 +519,13 @@ DisableImplicitIdToken | `false` | Use auth code grant to retrieve an id_token d
 Name | Default | Description
 --- | --- | ---
 **Name** | *required* | The name of a Kerberos authenticator object.
+SendAnonymousRequestAsService | false | Send anonymous requests (`Mode` is set to `None` for the path) as the service account OAKProxy is running as.
+
+### Headers Authenticator Binding Object
+
+Name | Default | Description
+--- | --- | ---
+**Name** | *required* | The name of a Headers authenticator object.
 
 ### Subsystem Configuration
 

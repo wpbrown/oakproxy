@@ -11,35 +11,35 @@ namespace OAKProxy.Proxy
     public class KerberosAuthenticator : IAuthenticator
     {
         private readonly AuthenticatorOptionsBase _options;
+        private readonly AuthenticatorBindingOptionsBase _bindingOptions;
 
-        public KerberosAuthenticator(AuthenticatorOptionsBase options)
+        public KerberosAuthenticator(AuthenticatorOptionsBase options, AuthenticatorBindingOptionsBase bindingOptions)
         {
             _options = options;
+            _bindingOptions = bindingOptions;
         }
 
-        public void Configure(HttpMessageHandlerBuilder builder)
+        public void Configure(ProxyMessageHandlerBuilder builder)
         {
-            if (builder.PrimaryHandler is HttpClientHandler handler) 
+            builder.PrimaryAuthenticatedHandler.UseDefaultCredentials = true;
+
+            if (_bindingOptions.SendAnonymousRequestAsService)
             {
-                handler.UseDefaultCredentials = true;
-            }
-            else
-            {
-                throw new Exception("Failed to configure for Kerberos auth.");
+                builder.PrimaryAnonymousHandler.UseDefaultCredentials = true;
             }
 
-            builder.AdditionalHandlers.Add(new KerberosHandler() {
+            builder.AuthenticatorHandlers.Add(new KerberosHandler() {
                 Options = _options,
                 IdentityService = builder.Services.GetService<KerberosIdentityService>()
             });
         }
 
-        private class KerberosHandler : DelegatingHandler
+        private class KerberosHandler : AuthenticatorHandler
         {
             public AuthenticatorOptionsBase Options;
             public KerberosIdentityService IdentityService;
 
-            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            protected override Task<HttpResponseMessage> SendAsyncAuthenticator(HttpRequestMessage request, CancellationToken cancellationToken)
             {
                 var user = request.GetUser();
 
@@ -50,7 +50,8 @@ namespace OAKProxy.Proxy
                 }
 
                 request.Properties.Add("S4uIdentity", domainIdentity);
-                return base.SendAsync(request, cancellationToken);
+                request.SetAuthenticatorUser(domainIdentity.Name);
+                return base.SendAsyncAuthenticator(request, cancellationToken);
             }
         }
     }

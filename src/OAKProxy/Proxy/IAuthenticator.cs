@@ -4,6 +4,6 @@ namespace OAKProxy.Proxy
 {
     public interface IAuthenticator
     {
-        void Configure(HttpMessageHandlerBuilder builder);
+        void Configure(ProxyMessageHandlerBuilder builder);
     }
 }

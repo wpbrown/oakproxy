@@ -22,7 +22,7 @@ namespace OAKProxy.Proxy
         private readonly ILogger<HeadersAuthenticator> _logger;
         private readonly bool _needsGlobals;
 
-        public HeadersAuthenticator(AuthenticatorOptionsBase options, ILogger<HeadersAuthenticator> logger)
+        public HeadersAuthenticator(AuthenticatorOptionsBase options, AuthenticatorBindingOptionsBase _, ILogger<HeadersAuthenticator> logger)
         {
             _options = options;
             _logger = logger;
@@ -87,9 +87,9 @@ namespace OAKProxy.Proxy
             return (options, text);
         }
 
-        public void Configure(HttpMessageHandlerBuilder builder)
+        public void Configure(ProxyMessageHandlerBuilder builder)
         {
-            builder.AdditionalHandlers.Add(new HeadersHandler()
+            builder.AuthenticatorHandlers.Add(new HeadersHandler()
             {
                 Authenticator = this
             });
@@ -160,14 +160,14 @@ namespace OAKProxy.Proxy
             }
         }
 
-        private class HeadersHandler : DelegatingHandler
+        private class HeadersHandler : AuthenticatorHandler
         {
             public HeadersAuthenticator Authenticator;
 
-            protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            protected override async Task<HttpResponseMessage> SendAsyncAuthenticator(HttpRequestMessage request, CancellationToken cancellationToken)
             {
                 await Authenticator.Apply(request, cancellationToken);
-                return await base.SendAsync(request, cancellationToken);
+                return await base.SendAsyncAuthenticator(request, cancellationToken);
             }
         }
 

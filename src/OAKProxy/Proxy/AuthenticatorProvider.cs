@@ -13,21 +13,12 @@ namespace OAKProxy.Proxy
 
         public AuthenticatorProvider(IServiceProvider provider, IOptions<ApplicationOptions> options)
         {
-            // Per Application Authenticator instances are possible in the future. None currently have
-            // binding configuration so we just always do single instance.
-            var singleInstances = new Dictionary<string, IAuthenticator>();
-
             foreach (var application in options.Value.Applications)
             {
-                _authenticators[application.Name] = application.AuthenticatorBindings?.Select(b =>
+                _authenticators[application.Name] = application.AuthenticatorBindings?.Select(bindingOptions =>
                 {
-                    if (!singleInstances.TryGetValue(b.Name, out var authenticator))
-                    {
-                        var authenticatorOptions = options.Value.Authenticators.First(a => a.Name == b.Name);
-                        authenticator = (IAuthenticator)ActivatorUtilities.CreateInstance(provider, authenticatorOptions.ImplType, authenticatorOptions);
-                        singleInstances[b.Name] = authenticator;
-                    }
-                    return authenticator;
+                    var authenticatorOptions = options.Value.Authenticators.First(a => a.Name == bindingOptions.Name);
+                    return (IAuthenticator)ActivatorUtilities.CreateInstance(provider, authenticatorOptions.ImplType, authenticatorOptions, bindingOptions);
                 }).ToArray() ?? new IAuthenticator[] { } ;
             }
         }
