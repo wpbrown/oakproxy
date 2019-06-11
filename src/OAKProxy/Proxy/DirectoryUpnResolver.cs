@@ -44,9 +44,13 @@ namespace OAKProxy.Proxy
 
         public Task UpdateAsync(AuthenticationTicket ticket)
         {
-            string objectId = ticket.Principal.Claims.First(c => c.Type == "oid").Value;
+            string anchorKey = _options.IdentityProviderAnchorClaimName;
+            string anchorValue = 
+                ticket.Principal.Claims.First(c => c.Type == anchorKey).Value +
+                "." + 
+                ticket.AuthenticationScheme;
 
-            var userPrincipalName = _directoryResultCache.GetOrCreate(objectId, (entry) => {
+            var userPrincipalName = _directoryResultCache.GetOrCreate(anchorValue, (entry) => {
                 var inboundUserClaims = ticket.Principal.Claims;
                 string inboundUpn = inboundUserClaims.FirstOrDefault(c => c.Type == _options.IdentityProviderUserClaimName)?.Value;
                 string directoryUpn = null;
@@ -56,7 +60,7 @@ namespace OAKProxy.Proxy
                     Claim sidClaim = null;
                     if (_options.SidMatching != SidMatchingOption.Never) // Sid Matching
                     {
-                        sidClaim = inboundUserClaims.FirstOrDefault(c => c.Type == "onprem_sid");
+                        sidClaim = inboundUserClaims.FirstOrDefault(c => c.Type == _options.DirectorySidClaimName);
                         if (sidClaim != null)
                         {
                             using (var principal = UserPrincipal.FindByIdentity(_adContext, IdentityType.Sid, sidClaim.Value))
@@ -79,19 +83,18 @@ namespace OAKProxy.Proxy
                 else // Application Matching
                 {
                     string appMappingKey = _options.IdentityProviderApplicationClaimName;
-                    string appMappingValue = appMappingKey == "oid" ? objectId :
-                        inboundUserClaims.FirstOrDefault(c => c.Type == appMappingKey)?.Value;
+                    string appMappingValue = inboundUserClaims.FirstOrDefault(c => c.Type == appMappingKey)?.Value;
                     if (String.IsNullOrEmpty(appMappingValue))
                     {
-                        _logger.LogError("Application with ObjectId '{ObjectId}' is missing the mapping claim '{AppMappingClaim}'.", objectId, appMappingKey);
+                        _logger.LogError("Application with anchor {AnchorKey}='{AnchorValue}' is missing the mapping claim '{AppMappingClaim}'.", anchorKey, anchorValue, appMappingKey);
                     }
                     else
                     {
-                        directoryUpn = _options.ServicePrincipalMappings.FirstOrDefault(m => m.ObjectId == objectId)?.UserPrincipalName;
+                        directoryUpn = _options.ServicePrincipalMappings.FirstOrDefault(m => m.ObjectId == appMappingValue)?.UserPrincipalName;
                         if (directoryUpn is null)
-                            _logger.LogError("Failed to translate application ObjectId '{ObjectId}' to an AD UPN.", objectId);
+                            _logger.LogError("Failed to translate application with mapping key {AppMappingClaim}='{AppMappingValue}' to a directory UPN.", appMappingKey, appMappingValue);
                         else
-                            _logger.LogDebug("Translated application ObjectId '{ObjectId}' to AD UPN '{AdUpn}'.", objectId, directoryUpn);
+                            _logger.LogDebug("Translated application with mapping key {AppMappingClaim}='{AppMappingValue}' to a directory UPN '{UPN}'.", appMappingKey, appMappingValue, directoryUpn);
                     }
                 }
 

@@ -56,11 +56,15 @@ namespace OAKProxy.Proxy
         [Required]
         public string Name { get; set; }
 
-        [Required]
+        // AzureAD
+        //[Required]
         public string Instance { get; set; }
 
-        [Required]
+        //[Required]
         public string TenantId { get; set; }
+
+        // OpenIDConenct
+        public string Authority { get; set; }
     }
 
     public class AuthenticatorOptionsBase : IValidatableObject
@@ -138,6 +142,9 @@ namespace OAKProxy.Proxy
         public string IdentityProviderApplicationClaimName { get; set; } = "oid";
 
         [Required]
+        public string IdentityProviderAnchorClaimName { get; set; } = "sub";
+
+        [Required]
         public string OutputClaimName { get; set; } = "onprem_upn";
 
         public string DirectoryServerName { get; set; }
@@ -152,6 +159,7 @@ namespace OAKProxy.Proxy
 
         [ValidateCollection]
         public ServicePrincipalMapping[] ServicePrincipalMappings { get; set; }
+        
 
         public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
         {
@@ -322,7 +330,8 @@ namespace OAKProxy.Proxy
 
     public enum IdentityProviderType
     {
-        AzureAD
+        AzureAD,
+        OpenIDConnect
     }
 
     public enum AuthenticatorType

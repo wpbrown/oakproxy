@@ -90,101 +90,169 @@ namespace OAKProxy
             var authBuilder = services.AddAuthentication();
             foreach (var application in _options.Applications)
             {
-                var schemes = ProxyAuthComponents.GetAuthSchemes(application);
                 var idp = _options.IdentityProviders.Single(i => i.Name == application.IdentityProviderBinding.Name);
-
-                if (application.HasPathMode(PathAuthOptions.AuthMode.Api))
+                if (idp.Type == IdentityProviderType.AzureAD)
                 {
-                    authBuilder.AddAzureADBearer(
-                        scheme: schemes.ApiName,
-                        jwtBearerScheme: schemes.JwtBearerName,
-                        configureOptions: options =>
-                        {
-                            options.Instance = idp.Instance;
-                            options.TenantId = idp.TenantId;
-                            options.ClientId = application.IdentityProviderBinding.ClientId;
-                        });
-                }
-
-                if (application.HasPathMode(PathAuthOptions.AuthMode.Web))
-                {
-                    authBuilder.AddAzureAD(
-                        scheme: schemes.WebName,
-                        openIdConnectScheme: schemes.OpenIdName,
-                        cookieScheme: schemes.CookieName,
-                        displayName: schemes.DisplayName,
-                        configureOptions: options =>
-                        {
-                            options.Instance = idp.Instance;
-                            options.TenantId = idp.TenantId;
-                            options.ClientId = application.IdentityProviderBinding.ClientId;
-                            options.ClientSecret = application.IdentityProviderBinding.ClientSecret;
-                            options.CallbackPath = ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.SignInCallback);
-                            options.SignedOutCallbackPath = ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.SignedOutCallback);
-                        });
+                    ConfigureAzureADAuth(authBuilder, application, idp);
                 }
             }
 
             // Additional configuration is done after all AzureAD configuration due to a bug fixed in ASP.NET Core 3.0:
             // https://github.com/aspnet/AspNetCore/commit/23c528c176e654e14cf5d078558420e00154d0e6
-            // Remerge this logic to the loop above after 3.0.
+            // Remerge this logic to the loop function above after migration to 3.0.
             foreach (var application in _options.Applications)
             {
-                var schemes = ProxyAuthComponents.GetAuthSchemes(application);
-
-                if (application.HasPathMode(PathAuthOptions.AuthMode.Api))
+                var idp = _options.IdentityProviders.Single(i => i.Name == application.IdentityProviderBinding.Name);
+                if (idp.Type == IdentityProviderType.AzureAD)
                 {
-                    services.Configure<JwtBearerOptions>(schemes.JwtBearerName, options =>
-                    {
-                        options.TokenValidationParameters.ValidAudiences = new string[] { application.IdentityProviderBinding.AppIdUri };
-                        options.TokenValidationParameters.AuthenticationType = ProxyAuthComponents.ApiAuth;
-                        options.TokenValidationParameters.RoleClaimType = AzureADClaims.Roles;
-                        options.TokenValidationParameters.NameClaimTypeRetriever = (token, _) =>
-                        {
-                            var jwtToken = (JwtSecurityToken)token;
-                            return jwtToken.Claims.Any(c => c.ValueType == AzureADClaims.UserPrincipalName) ?
-                                AzureADClaims.UserPrincipalName : AzureADClaims.ObjectId;
-                        };
-
-                        options.SecurityTokenValidators.Clear();
-                        options.SecurityTokenValidators.Add(new JwtSecurityTokenHandler
-                        {
-                            MapInboundClaims = false
-                        });
-                    });
+                    ConfigureAzureADAuthOptions(services, application);
                 }
-
-                if (application.HasPathMode(PathAuthOptions.AuthMode.Web))
+                else // idp.Type == IdentityProviderType.OpenIDConnect
                 {
-                    services.Configure<CookieAuthenticationOptions>(schemes.CookieName, options =>
-                    {
-                        options.AccessDeniedPath = ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.AccessDenied);
-                        options.Cookie.SameSite = application.SessionCookieSameSiteMode ?? SameSiteMode.Lax;
-                        options.Cookie.Name = $"{ProxyAuthComponents.CookiePrefix}.{ProxyAuthComponents.AuthCookieId}.{application.Name}";
-                    });
-
-                    services.Configure<OpenIdConnectOptions>(schemes.OpenIdName, options =>
-                    {
-                        options.ClaimActions.DeleteClaims("aio", "family_name", "given_name", "name", "sub", "tid", "unique_name", "uti");
-
-                        options.TokenValidationParameters.AuthenticationType = ProxyAuthComponents.WebAuth;
-                        options.TokenValidationParameters.RoleClaimType = AzureADClaims.Roles;
-                        options.TokenValidationParameters.NameClaimType = AzureADClaims.UserPrincipalName;
-                        options.RemoteSignOutPath = ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.RemoteSignOut);
-                        options.ResponseType = application.IdentityProviderBinding.DisableImplicitIdToken ?
-                            OpenIdConnectResponseType.Code : OpenIdConnectResponseType.IdToken;
-
-                        options.SecurityTokenValidator = new JwtSecurityTokenHandler
-                        {
-                            MapInboundClaims = false
-                        };
-
-                        if (application.IdentityProviderBinding.UseApplicationMetadata)
-                        {
-                            options.MetadataAddress = $"{options.Authority}/.well-known/openid-configuration?appid={options.ClientId}";
-                        }
-                    });
+                    ConfigureOpenIDConnectAuth(authBuilder, application, idp);
                 }
+            }
+        }
+
+        private static void ConfigureAzureADAuth(AuthenticationBuilder authBuilder, ProxyApplication application, IdentityProvider idp)
+        {
+            var schemes = ProxyAuthComponents.GetAuthSchemes(application);
+            if (application.HasPathMode(PathAuthOptions.AuthMode.Api))
+            {
+                authBuilder.AddAzureADBearer(
+                    scheme: schemes.ApiName,
+                    jwtBearerScheme: schemes.JwtBearerName,
+                    configureOptions: options =>
+                    {
+                        options.Instance = idp.Instance;
+                        options.TenantId = idp.TenantId;
+                        options.ClientId = application.IdentityProviderBinding.ClientId;
+                    });
+            }
+
+            if (application.HasPathMode(PathAuthOptions.AuthMode.Web))
+            {
+                authBuilder.AddAzureAD(
+                    scheme: schemes.WebName,
+                    openIdConnectScheme: schemes.OpenIdName,
+                    cookieScheme: schemes.CookieName,
+                    displayName: schemes.DisplayName,
+                    configureOptions: options =>
+                    {
+                        options.Instance = idp.Instance;
+                        options.TenantId = idp.TenantId;
+                        options.ClientId = application.IdentityProviderBinding.ClientId;
+                        options.ClientSecret = application.IdentityProviderBinding.ClientSecret;
+                        options.CallbackPath = ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.SignInCallback);
+                        options.SignedOutCallbackPath = ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.SignedOutCallback);
+                    });
+            }
+        }
+
+        private static void ConfigureAzureADAuthOptions(IServiceCollection services, ProxyApplication application)
+        {
+            var schemes = ProxyAuthComponents.GetAuthSchemes(application);
+
+            if (application.HasPathMode(PathAuthOptions.AuthMode.Api))
+            {
+                services.Configure<JwtBearerOptions>(schemes.JwtBearerName, options =>
+                {
+                    options.TokenValidationParameters.ValidAudiences = new string[] { application.IdentityProviderBinding.AppIdUri };
+                    options.TokenValidationParameters.AuthenticationType = ProxyAuthComponents.ApiAuth;
+                    options.TokenValidationParameters.RoleClaimType = AzureADClaims.Roles;
+                    options.TokenValidationParameters.NameClaimTypeRetriever = (token, _) =>
+                    {
+                        var jwtToken = (JwtSecurityToken)token;
+                        return jwtToken.Claims.Any(c => c.ValueType == AzureADClaims.UserPrincipalName) ?
+                            AzureADClaims.UserPrincipalName : AzureADClaims.ObjectId;
+                    };
+
+                    options.SecurityTokenValidators.Clear();
+                    options.SecurityTokenValidators.Add(new JwtSecurityTokenHandler
+                    {
+                        MapInboundClaims = false
+                    });
+                });
+            }
+
+            if (application.HasPathMode(PathAuthOptions.AuthMode.Web))
+            {
+                services.Configure<CookieAuthenticationOptions>(schemes.CookieName, options =>
+                {
+                    options.AccessDeniedPath = ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.AccessDenied);
+                    options.Cookie.SameSite = application.SessionCookieSameSiteMode ?? SameSiteMode.Lax;
+                    options.Cookie.Name = $"{ProxyAuthComponents.CookiePrefix}.{ProxyAuthComponents.AuthCookieId}.{application.Name}";
+                });
+
+                services.Configure<OpenIdConnectOptions>(schemes.OpenIdName, options =>
+                {
+                    options.ClaimActions.DeleteClaims("aio", "family_name", "given_name", "name", "tid", "unique_name", "uti");
+
+                    options.TokenValidationParameters.AuthenticationType = ProxyAuthComponents.WebAuth;
+                    options.TokenValidationParameters.RoleClaimType = AzureADClaims.Roles;
+                    options.TokenValidationParameters.NameClaimType = AzureADClaims.UserPrincipalName;
+                    options.RemoteSignOutPath = ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.RemoteSignOut);
+                    options.ResponseType = application.IdentityProviderBinding.DisableImplicitIdToken ?
+                        OpenIdConnectResponseType.Code : OpenIdConnectResponseType.IdToken;
+
+                    options.SecurityTokenValidator = new JwtSecurityTokenHandler
+                    {
+                        MapInboundClaims = false
+                    };
+
+                    if (application.IdentityProviderBinding.UseApplicationMetadata)
+                    {
+                        options.MetadataAddress = $"{options.Authority}/.well-known/openid-configuration?appid={options.ClientId}";
+                    }
+                });
+            }
+        }
+
+        private static void ConfigureOpenIDConnectAuth(AuthenticationBuilder authBuilder, ProxyApplication application, IdentityProvider idp)
+        {
+            var schemes = ProxyAuthComponents.GetAuthSchemes(application);
+
+            if (application.HasPathMode(PathAuthOptions.AuthMode.Api))
+            {
+                authBuilder.AddJwtBearer(schemes.ApiName, options =>
+                {
+                    options.Authority = idp.Authority;
+                    options.Audience = application.IdentityProviderBinding.ClientId;
+                    options.TokenValidationParameters.ValidAudiences = new string[] { application.IdentityProviderBinding.AppIdUri };
+                    options.TokenValidationParameters.AuthenticationType = ProxyAuthComponents.ApiAuth;
+                    options.SecurityTokenValidators.Clear();
+                    options.SecurityTokenValidators.Add(new JwtSecurityTokenHandler
+                    {
+                        MapInboundClaims = false
+                    });
+                });
+            }
+
+            if (application.HasPathMode(PathAuthOptions.AuthMode.Web))
+            {
+                authBuilder.AddOpenIdConnect(schemes.OpenIdName, options =>
+                {
+                    options.ClientId = application.IdentityProviderBinding.ClientId;
+                    options.ClientSecret = application.IdentityProviderBinding.ClientSecret;
+                    options.Authority = idp.Authority;
+                    options.CallbackPath = ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.SignInCallback);
+                    options.SignedOutCallbackPath = ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.SignedOutCallback);
+                    options.SignInScheme = schemes.WebName;
+                    options.UseTokenLifetime = true;
+                    options.TokenValidationParameters.AuthenticationType = ProxyAuthComponents.WebAuth;
+                    options.RemoteSignOutPath = ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.RemoteSignOut);
+                    options.SecurityTokenValidator = new JwtSecurityTokenHandler
+                    {
+                        MapInboundClaims = false
+                    };
+                });
+                authBuilder.AddCookie(schemes.WebName, options =>
+                {
+                    options.AccessDeniedPath = ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.AccessDenied);
+                    options.Cookie.SameSite = application.SessionCookieSameSiteMode ?? SameSiteMode.Lax;
+                    options.Cookie.Name = $"{ProxyAuthComponents.CookiePrefix}.{ProxyAuthComponents.AuthCookieId}.{application.Name}";
+                    options.ForwardChallenge = schemes.OpenIdName;
+                });
             }
         }
 
