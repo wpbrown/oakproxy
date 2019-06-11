@@ -24,6 +24,9 @@ namespace OAKProxy.Proxy
         [ValidateCollection]
         public AuthenticatorOptionsBase[] Authenticators { get; set; }
 
+        [ValidateCollection]
+        public ClaimsProviderOptionsBase[] ClaimsProviders { get; set; }
+
         public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
         {
             foreach (var application in Applications)
@@ -69,10 +72,8 @@ namespace OAKProxy.Proxy
         public string Name { get; set; }
 
         // Kerberos
-        public SidMatchingOption SidMatching { get; set; }
-
-        [ValidateCollection]
-        public ServicePrincipalMapping[] ServicePrincipalMappings { get; set; }
+        [Required]
+        public string DomainUpnClaimName { get; set; } = "onprem_upn";
 
         // Headers
         [ValidateCollection]
@@ -100,6 +101,60 @@ namespace OAKProxy.Proxy
             if (Type == AuthenticatorType.Kerberos)
                 yield return new ValidationResult($"{nameof(Type)} {nameof(AuthenticatorType.Kerberos)} is not supported in this build. You must install the Kerberos enabled build on Windows Server.", new string[] { nameof(Type) });
 #endif
+            yield break;
+        }
+    }
+
+    public class ClaimsProviderOptionsBase : IValidatableObject
+    {
+        [Required]
+        public ClaimsProviderType? Type { get; set; }
+
+        [Required]
+        public string Name { get; set; }
+
+        public Type ImplType
+        {
+            get
+            {
+                switch (Type.Value)
+                {
+                    case ClaimsProviderType.DirectoryUpnResolver:
+                        return typeof(DirectoryUpnResolver);
+                    default:
+                        throw new Exception("Unknown claims provider type.");
+                }
+            }
+        }
+
+        // DirectoryUpnResolver
+        [Required]
+        public string DirectorySidClaimName { get; set; } = "onprem_sid";
+
+        [Required]
+        public string IdentityProviderUserClaimName { get; set; } = "upn";
+
+        [Required]
+        public string IdentityProviderApplicationClaimName { get; set; } = "oid";
+
+        [Required]
+        public string OutputClaimName { get; set; } = "onprem_upn";
+
+        public string DirectoryServerName { get; set; }
+
+        public string DirectoryServerUsername { get; set; }
+
+        public string DirectoryServerPassword { get; set; }
+
+        public DirectoryServerType DirectoryServerType { get; set; }
+
+        public SidMatchingOption SidMatching { get; set; }
+
+        [ValidateCollection]
+        public ServicePrincipalMapping[] ServicePrincipalMappings { get; set; }
+
+        public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+        {
             yield break;
         }
     }
@@ -138,6 +193,8 @@ namespace OAKProxy.Proxy
 
         public bool DisableImplicitIdToken { get; set; }
 
+        public bool UseApplicationMetadata { get; set; }
+
         public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
         {
             if (DisableImplicitIdToken && String.IsNullOrWhiteSpace(ClientSecret))
@@ -152,8 +209,14 @@ namespace OAKProxy.Proxy
         [Required]
         public string Name { get; set; }
 
-        // Headers
+        // Kerberos
         public bool SendAnonymousRequestAsService { get; set; }
+    }
+    
+    public class ClaimsProviderBindingOptionsBase
+    {
+        [Required]
+        public string Name { get; set; }
     }
 
     public class ServerOptions
@@ -186,6 +249,9 @@ namespace OAKProxy.Proxy
 
         [ValidateCollection]
         public AuthenticatorBindingOptionsBase[] AuthenticatorBindings { get; set; }
+
+        [ValidateCollection]
+        public ClaimsProviderBindingOptionsBase[] ClaimsProviderBindings { get; set; }
 
         [Required]
         public HostString? Host { get; set; }
@@ -263,6 +329,17 @@ namespace OAKProxy.Proxy
     {
         Kerberos,
         Headers
+    }
+
+    public enum ClaimsProviderType
+    {
+        DirectoryUpnResolver
+    }
+
+    public enum DirectoryServerType
+    {
+        CurrentDomain,
+        LDS
     }
 
     public class KeyVaultOptions

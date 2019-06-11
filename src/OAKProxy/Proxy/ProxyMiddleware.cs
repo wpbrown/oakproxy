@@ -20,10 +20,12 @@ namespace OAKProxy.Proxy
     public class ProxyMiddleware
     {
         private readonly IHttpClientFactory _clientFactory;
+        private readonly IClaimsProviderProvider _claimsProviders;
 
-        public ProxyMiddleware(RequestDelegate next, IHttpClientFactory clientFactory)
+        public ProxyMiddleware(RequestDelegate next, IHttpClientFactory clientFactory, IClaimsProviderProvider claimsProviders)
         {
             _clientFactory = clientFactory;
+            _claimsProviders = claimsProviders;
         }
 
         public async Task Invoke(HttpContext context, IProxyApplicationService applicationService)
@@ -34,6 +36,12 @@ namespace OAKProxy.Proxy
             }
 
             var application = applicationService.GetActiveApplication();
+            var claimsTransforms = _claimsProviders[application.Name];
+            foreach (var claimsTransform in claimsTransforms)
+            {
+                await claimsTransform.UpdateAsync(context.AuthenticationTicket());
+            }
+
             var client = _clientFactory.CreateClient(application.Name);
 
             using (var requestMessage = CreateHttpRequestMessageFromIncomingRequest(context))
@@ -63,7 +71,7 @@ namespace OAKProxy.Proxy
                 }
 
                 var telemetry = context.Features.Get<RequestTelemetry>();
-                var authenticatorUser = requestMessage.GetAuthenticatorUser();
+                string authenticatorUser = AuthenticatorHandler.GetAuthenticatorProvidedUser(requestMessage);
                 if (telemetry != null && authenticatorUser != null)
                 {
                     telemetry.Context.User.AccountId = authenticatorUser;
@@ -77,7 +85,7 @@ namespace OAKProxy.Proxy
         {
             var request = context.Request;
             var requestMessage = new HttpRequestMessage();
-            requestMessage.SetUser(context.User);
+            AuthenticatorHandler.RelateIncomingRequestToMessage(context, requestMessage);
 
             var requestMethod = request.Method;
             if (!HttpMethods.IsGet(requestMethod) &&

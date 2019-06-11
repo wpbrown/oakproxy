@@ -178,6 +178,11 @@ namespace OAKProxy
                         {
                             MapInboundClaims = false
                         };
+
+                        if (application.IdentityProviderBinding.UseApplicationMetadata)
+                        {
+                            options.MetadataAddress = $"{options.Authority}/.well-known/openid-configuration?appid={options.ClientId}";
+                        }
                     });
                 }
             }
@@ -228,6 +233,7 @@ namespace OAKProxy
             services.AddScoped<IProxyApplicationService, ProxyApplicationService>();
             services.AddSingleton<KerberosIdentityService>();
             services.AddSingleton<IAuthenticatorProvider, AuthenticatorProvider>();
+            services.AddSingleton<IClaimsProviderProvider, ClaimsProviderProvider>();
             services.AddMemoryCache();
 
             foreach (var application in _options.Applications)

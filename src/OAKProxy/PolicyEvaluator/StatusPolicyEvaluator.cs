@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
@@ -8,17 +9,47 @@ using Microsoft.AspNetCore.Http;
 
 namespace OAKProxy.PolicyEvaluator
 {
-    public class StatusPolicyEvaluator : Microsoft.AspNetCore.Authorization.Policy.PolicyEvaluator
+    public class StatusPolicyEvaluator : IPolicyEvaluator
     {
         private readonly IAuthorizationService _authorization;
 
-        public StatusPolicyEvaluator(IAuthorizationService authorization) :
-            base(authorization)
+        public StatusPolicyEvaluator(IAuthorizationService authorization)
         {
             _authorization = authorization;
         }
 
-        public override async Task<PolicyAuthorizationResult> AuthorizeAsync(AuthorizationPolicy policy, AuthenticateResult authenticationResult, HttpContext context, object resource)
+        public async Task<AuthenticateResult> AuthenticateAsync(AuthorizationPolicy policy, HttpContext context)
+        {
+            if (policy.AuthenticationSchemes == null || policy.AuthenticationSchemes.Count == 0)
+            {
+                throw new Exception("Authenticating a policy with no schemes specified is not supported.");
+            }
+
+            AuthenticateResult result = null;
+            foreach (var scheme in policy.AuthenticationSchemes)
+            {
+                result = await context.AuthenticateAsync(scheme);
+                if (result != null && result.Succeeded)
+                {
+                    break;
+                }
+            }
+
+            if (result != null && result.Succeeded)
+            {
+                context.User = result.Principal;
+                context.AuthenticationTicket(result.Ticket);
+                return result;
+            }
+            else
+            {
+                context.User = new ClaimsPrincipal(new ClaimsIdentity());
+                return AuthenticateResult.NoResult();
+            }
+        }
+
+
+        public async Task<PolicyAuthorizationResult> AuthorizeAsync(AuthorizationPolicy policy, AuthenticateResult authenticationResult, HttpContext context, object resource)
         {
             if (policy == null)
             {

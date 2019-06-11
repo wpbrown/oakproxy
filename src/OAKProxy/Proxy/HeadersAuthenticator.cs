@@ -95,9 +95,9 @@ namespace OAKProxy.Proxy
             });
         }
 
-        public async Task Apply(HttpRequestMessage request, CancellationToken cancellationToken)
+        public async Task Apply(AuthenticatorSendContext context, CancellationToken cancellationToken)
         {
-            var user = request.GetUser();
+            var user = context.AuthenticatedUser;
             ExpressionGlobals globals = null;
             if (_needsGlobals)
             {
@@ -150,12 +150,12 @@ namespace OAKProxy.Proxy
 
                 if (value == null)
                 {
-                    if (request.Headers.Contains(applicator.Definition.HeaderName))
-                        request.Headers.Remove(applicator.Definition.HeaderName);
+                    if (context.Message.Headers.Contains(applicator.Definition.HeaderName))
+                        context.Message.Headers.Remove(applicator.Definition.HeaderName);
                 }
                 else
                 {
-                    request.Headers.Add(applicator.Definition.HeaderName, value);
+                    context.Message.Headers.Add(applicator.Definition.HeaderName, value);
                 }
             }
         }
@@ -164,10 +164,10 @@ namespace OAKProxy.Proxy
         {
             public HeadersAuthenticator Authenticator;
 
-            protected override async Task<HttpResponseMessage> SendAsyncAuthenticator(HttpRequestMessage request, CancellationToken cancellationToken)
+            protected override async Task<HttpResponseMessage> SendAsyncAuthenticator(AuthenticatorSendContext context, CancellationToken cancellationToken)
             {
-                await Authenticator.Apply(request, cancellationToken);
-                return await base.SendAsyncAuthenticator(request, cancellationToken);
+                await Authenticator.Apply(context, cancellationToken);
+                return await base.SendAsyncAuthenticator(context, cancellationToken);
             }
         }
 

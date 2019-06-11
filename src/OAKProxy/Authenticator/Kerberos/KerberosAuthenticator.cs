@@ -1,6 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Http;
 using System;
+using System.Linq;
 using System.Net.Http;
 using System.Security.Principal;
 using System.Threading;
@@ -39,19 +39,24 @@ namespace OAKProxy.Proxy
             public AuthenticatorOptionsBase Options;
             public KerberosIdentityService IdentityService;
 
-            protected override Task<HttpResponseMessage> SendAsyncAuthenticator(HttpRequestMessage request, CancellationToken cancellationToken)
+            protected override Task<HttpResponseMessage> SendAsyncAuthenticator(AuthenticatorSendContext context, CancellationToken cancellationToken)
             {
-                var user = request.GetUser();
-
-                WindowsIdentity domainIdentity = IdentityService.TranslateDomainIdentity(user, Options);
-                if (domainIdentity is null)
+                var upnClaim = context.AuthenticatedUser.Claims.FirstOrDefault(c => c.Type == Options.DomainUpnClaimName);
+                string domainUserPrincipalName = upnClaim?.Value;
+                if (String.IsNullOrEmpty(domainUserPrincipalName))
                 {
-                    throw new AuthenticatorException(Errors.Code.NoIdentityTranslation, "Identity could not be translated to a domain identity");
+                    throw new AuthenticatorException(Errors.Code.DomainUpnClaimMissing, "The domain identity claim is missing.");
                 }
 
-                request.Properties.Add("S4uIdentity", domainIdentity);
-                request.SetAuthenticatorUser(domainIdentity.Name);
-                return base.SendAsyncAuthenticator(request, cancellationToken);
+                WindowsIdentity domainIdentity = IdentityService.LogonUser(domainUserPrincipalName);
+                if (domainIdentity is null)
+                {
+                    throw new AuthenticatorException(Errors.Code.DomainLogonFailed, "The domain identity could not be logged on to the domain.");
+                }
+
+                context.Message.Properties.Add("S4uIdentity", domainIdentity);
+                context.AuthenticatorProvidedUser = domainUserPrincipalName;
+                return base.SendAsyncAuthenticator(context, cancellationToken);
             }
         }
     }

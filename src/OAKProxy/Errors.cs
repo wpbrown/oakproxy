@@ -18,7 +18,9 @@ namespace OAKProxy
             NoIdentityTranslation,
             NoAuthorizationClaims,
             UnconfiguredPath,
-            NoResponse
+            NoResponse,
+            DomainLogonFailed = 100,
+            DomainUpnClaimMissing = 101
         }
 
         public static readonly MediaTypeHeaderValue ApplicationJson = 
