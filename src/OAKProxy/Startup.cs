@@ -217,6 +217,11 @@ namespace OAKProxy
                 authBuilder.AddJwtBearer(schemes.ApiName, options =>
                 {
                     options.Authority = idp.Authority;
+                    if (idp.AccessTokenIssuer != null)
+                    {
+                        options.TokenValidationParameters.ValidIssuer = idp.AccessTokenIssuer;
+                    }
+                    
                     options.Audience = application.IdentityProviderBinding.ClientId;
                     options.TokenValidationParameters.ValidAudiences = new string[] { application.IdentityProviderBinding.AppIdUri };
                     options.TokenValidationParameters.AuthenticationType = ProxyAuthComponents.ApiAuth;
@@ -274,7 +279,17 @@ namespace OAKProxy
                     {
                         var apiSchemes = new List<string>() { schemes.ApiName };
                         if (application.ApiAllowWebSession)
-                            apiSchemes.Add(schemes.CookieName);
+                        {
+                            bool isAzureAD = options.IdentityProviders.First(i => i.Name == application.IdentityProviderBinding.Name).Type == IdentityProviderType.AzureAD;
+                            if (isAzureAD)
+                            {
+                                apiSchemes.Add(schemes.CookieName);
+                            } 
+                            else
+                            {
+                                apiSchemes.Add(schemes.WebName);
+                            }
+                        }
 
                         builder.AddAuthenticationSchemes(apiSchemes.ToArray())
                             .RequireAuthenticatedUser()

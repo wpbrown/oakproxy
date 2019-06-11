@@ -20,6 +20,12 @@ namespace OAKProxy.PolicyEvaluator
                 
                 if (context.User.Identity.AuthenticationType == ProxyAuthComponents.ApiAuth)
                 {
+                    if (context.User.HasClaim("apptype", "Confidential") &&
+                        context.User.HasClaim(AzureADClaims.Scope, ProxyAuthComponents.ApiAppRole)) // AD FS application
+                    {
+                        return true;
+                    }
+
                     if (context.User.IsInRole(ProxyAuthComponents.ApiAppRole))
                     {
                         return context.User.HasClaim(c => c.Type == AzureADClaims.ApplicationAuthType && Int32.Parse(c.Value) > 0);

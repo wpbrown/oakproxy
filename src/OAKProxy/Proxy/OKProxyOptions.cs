@@ -65,6 +65,8 @@ namespace OAKProxy.Proxy
 
         // OpenIDConenct
         public string Authority { get; set; }
+
+        public string AccessTokenIssuer { get; set; }
     }
 
     public class AuthenticatorOptionsBase : IValidatableObject
