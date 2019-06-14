@@ -415,6 +415,7 @@ LogLevel | `Information` | Log verbosity. [Valid values](https://docs.microsoft.
 ApplicationInsightsKey | *optional* | If provided, OAKProxy will feed information to [Azure Application Insights](https://docs.microsoft.com/en-us/azure/azure-monitor/app/app-insights-overview).
 EnableHealthChecks | `false` | Listen at `/.oakproxy/health` for health probes from gateways/load-balancers.
 KeyVault | *optional* | A single Azure Key Vault object.
+ConfigureFromKeyVault | `true` | If a Key Vault object is provided, load any available configuration secrets from it. Set to `false` to prevent reading configuration from Key Vault.
 
 ### Azure Key Vault Object
 

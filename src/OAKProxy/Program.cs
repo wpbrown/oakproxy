@@ -173,26 +173,25 @@ namespace OAKProxy
 
             // Azure Key Vault
             var keyVaultSection = hostConfiguration?.GetSection("Server:KeyVault");
-            if (keyVaultSection != null && keyVaultSection.Exists())
+            var useKeyVaultConfiguration = hostConfiguration?.GetValue<bool>("Server:ConfigureFromKeyVault") ?? true;
+            if (keyVaultSection != null && keyVaultSection.Exists() && useKeyVaultConfiguration)
             {
                 var options = new KeyVaultOptions(keyVaultSection);
-                var vaultUri = options.Name.StartsWith("https", StringComparison.InvariantCultureIgnoreCase) ?
-                    options.Name : $"https://{options.Name}.vault.azure.net/";
 
                 if (options.ClientId == null)
                 {
                     // Use Managed Identity
-                    builder.AddAzureKeyVault(vaultUri);
+                    builder.AddAzureKeyVault(options.VaultUri);
                 }
                 else
                 {
                     if (options.ClientSecret != null)
                     {
-                        builder.AddAzureKeyVault(vaultUri, options.ClientId, options.ClientSecret);
+                        builder.AddAzureKeyVault(options.VaultUri, options.ClientId, options.ClientSecret);
                     }
                     else if (options.Certificate != null)
                     {
-                        builder.AddAzureKeyVault(vaultUri, options.ClientId, options.Certificate);
+                        builder.AddAzureKeyVault(options.VaultUri, options.ClientId, options.Certificate);
                     }
                 }
             }

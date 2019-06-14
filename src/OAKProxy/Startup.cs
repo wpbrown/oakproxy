@@ -5,10 +5,13 @@ using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Policy;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HostFiltering;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.Azure.KeyVault;
+using Microsoft.Azure.Services.AppAuthentication;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http;
@@ -19,7 +22,9 @@ using OAKProxy.PolicyEvaluator;
 using OAKProxy.Proxy;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IdentityModel.Tokens.Jwt;
+using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -55,6 +60,7 @@ namespace OAKProxy
                 return;
             }
 
+            // Header Forwarding
             if (_options.Server.UseForwardedHeaders)
             {
                 services.Configure<ForwardedHeadersOptions>(options =>
@@ -66,6 +72,7 @@ namespace OAKProxy
                 });
             }
 
+            // Application Insights
             if (!String.IsNullOrWhiteSpace(_options.Server.ApplicationInsightsKey))
             {
                 services.AddApplicationInsightsTelemetry(options =>
@@ -74,6 +81,87 @@ namespace OAKProxy
                     _configuration.GetSection("Configuration:ApplicationInsights").Bind(options);
                 });
                 services.AddApplicationInsightsTelemetryProcessor<TelemetryProcessor>();
+            }
+
+            // Key Management
+            if (_options.Server.KeyManagement != null)
+            {
+                var dataProtectionBuilder = services.AddDataProtection();
+                var kmOptions = _options.Server.KeyManagement;
+
+                kmOptions.LoadCertificates(_configuration.GetSection("Server:KeyManagement"));
+
+                if (!String.IsNullOrEmpty(kmOptions.StoreToFilePath))
+                {
+                    var directoryInfo = new DirectoryInfo(kmOptions.StoreToFilePath);
+                    if (!directoryInfo.Exists)
+                    {
+                        throw new DirectoryNotFoundException("The specified key storage directory does not exist.");
+                    }
+                    dataProtectionBuilder.PersistKeysToFileSystem(directoryInfo);
+                }
+                else if (!String.IsNullOrEmpty(kmOptions.StoreToBlobContainer))
+                {
+                    // Upgrade to support Managed Identity after .NET Core 3.0. This API is updated to use
+                    // new storage SDK in 3.0.
+                    dataProtectionBuilder.PersistKeysToAzureBlobStorage(new Uri(kmOptions.StoreToBlobContainer));
+                }
+
+                if (!String.IsNullOrEmpty(kmOptions.ProtectWithKeyVaultKey))
+                {
+                    var keyVaultSection = _configuration?.GetSection("Server:KeyVault");
+                    var kvOptions = new KeyVaultOptions(keyVaultSection);
+
+                    var keyIdBuilder = new UriBuilder(kvOptions.VaultUri)
+                    {
+                        Path = $"/keys/${kmOptions.ProtectWithKeyVaultKey}"
+                    };
+                    var keyId = keyIdBuilder.Uri.ToString();
+
+                    // TODO: Unify configuration and key management key vault clients
+                    if (kvOptions.ClientId == null)
+                    {
+                        // Use Managed Identity
+                        var azureServiceTokenProvider = new AzureServiceTokenProvider();
+                        var authenticationCallback = new KeyVaultClient.AuthenticationCallback(azureServiceTokenProvider.KeyVaultTokenCallback);
+                        dataProtectionBuilder.ProtectKeysWithAzureKeyVault(new KeyVaultClient(authenticationCallback), keyId);
+                    }
+                    else
+                    {
+                        if (kvOptions.ClientSecret != null)
+                        {
+                            dataProtectionBuilder.ProtectKeysWithAzureKeyVault(keyId, kvOptions.ClientId, kvOptions.ClientSecret);
+                        }
+                        else if (kvOptions.Certificate != null)
+                        {
+                            dataProtectionBuilder.ProtectKeysWithAzureKeyVault(keyId, kvOptions.ClientId, kvOptions.Certificate);
+                        }
+                    }
+                }
+                else if (kmOptions.ProtectWithCertificate != null)
+                {
+                    dataProtectionBuilder.ProtectKeysWithCertificate(kmOptions.ProtectWithCertificate);
+
+                    if (kmOptions.UnprotectWithCertificates != null)
+                    {
+                        dataProtectionBuilder.UnprotectKeysWithAnyCertificate(kmOptions.UnprotectWithCertificates);
+                    }
+                }
+                else if (kmOptions.ProtectWithDpapiNg != null)
+                {
+                    if (kmOptions.ProtectWithDpapiNg.UseSelfRule)
+                    {
+                        dataProtectionBuilder.ProtectKeysWithDpapiNG();
+                    }
+                    else
+                    {
+                        dataProtectionBuilder.ProtectKeysWithDpapiNG(kmOptions.ProtectWithDpapiNg.DescriptorRule, kmOptions.ProtectWithDpapiNg.DescriptorFlags);
+                    }
+                }
+                else
+                {
+                    throw new Exception("Unvalidated options would have allowed for unprotected key storage.");
+                }
             }
 
             ConfigureAuthentication(services);
