@@ -83,6 +83,7 @@ Header-based Authentication | Yes | With Ping Access
     - [Headers Authenticator Binding Object](#headers-authenticator-binding-object)
     - [Subsystem Configuration](#subsystem-configuration)
   - [Header Expressions](#header-expressions)
+  - [Key Management](#key-management)
   - [Example Configuration](#example-configuration)
     - [HTTPS](#https)
 - [Troubleshooting](#troubleshooting)
@@ -146,7 +147,7 @@ The server can be run on an account or host with highly constrained or no outbou
 
 ## High Availability
 
-OAKProxy is a stateless proxy. Any number of instances can be load-balanced. 
+OAKProxy is a stateless proxy. Any number of instances can be load-balanced in a cluster. However, to serve OIDC/web content from a cluster you must configure [key management](#key-management). All nodes in the cluster need to be able to decrypt cookies issues by other nodes. 
 
 A load-balancer can evaluate the health by looking for a 200 response from `/.oakproxy/health`.
 
@@ -571,6 +572,19 @@ var gratuitousRegex = new Regex(@"\w{4}$");
 string oidClaim = c["oid"];
 Match match = gratuitousRegex.Match(oidClaim);
 return match.Success ? match.Value : IPAddress.IPv6Loopback.ToString();
+```
+
+## Key Management
+
+Keys can be encrypted and persisted in shared storage. 
+
+Example Scenario: a cluster is deployed in an AD DS domain environment. OAKProxy runs as a gMSA account on all nodes and all nodes have access to the SMB server `fileserv01`. Because the nodes run as the same account the DPAPI NG encryption keys will be automatically shared via AD DS.
+```yaml
+Server:
+  KeyManagement:
+    StoreToFilePath: '\\fileserv01\oakproxy\keys'
+    ProtectWithDpapiNg:
+        UseSelfRule: true
 ```
 
 ## Example Configuration
