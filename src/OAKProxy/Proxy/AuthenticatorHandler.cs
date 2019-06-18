@@ -32,7 +32,8 @@ namespace OAKProxy.Proxy
             {
                 var context = new AuthenticatorSendContext() {
                     Message = request,
-                    AuthenticatedUser = userIsAuthenticated ? GetTicket(request).Principal : null
+                    AuthenticatedUser = userIsAuthenticated ? GetTicket(request).Principal : null,
+                    AuthenticationProperties = userIsAuthenticated ? GetTicket(request).Properties : null
                 };
                 return SendAsyncAuthenticator(context, cancellationToken);
             }
@@ -97,6 +98,8 @@ namespace OAKProxy.Proxy
         public HttpRequestMessage Message { get; internal set; }
 
         public ClaimsPrincipal AuthenticatedUser { get; internal set; }
+
+        public AuthenticationProperties AuthenticationProperties { get; internal set; }
 
         public string AuthenticatorProvidedUser
         {

@@ -200,13 +200,25 @@ namespace OAKProxy
                     _logger.LogInformation("These claims will be automatically retained for application '{Application}': {Claims}.", application.Name, String.Join(", ", additionalClaimsRetained));
                 }
 
+                bool retainWebToken = false;
+                bool retainApiToken = false;
+                var bearerAuthenticators = application.AuthenticatorBindings?
+                    .Select(b => _options.Authenticators.Single(a => a.Name == b.Name))
+                    .Where(a => a.Type == AuthenticatorType.Bearer);
+                if (bearerAuthenticators?.Count() > 0)
+                {
+                    retainWebToken = bearerAuthenticators.Any(a => a.PassWebIdToken == true);
+                    retainApiToken = bearerAuthenticators.Any(a => a.PassApiAccessToken == true);
+                }
+
                 if (idp.Type == IdentityProviderType.AzureAD)
                 {
-                    ConfigureAzureADAuthOptions(services, application, additionalClaimsRetained);
+                    ConfigureAzureADAuthOptions(services, application, additionalClaimsRetained, retainWebToken, retainApiToken);
                 }
                 else // idp.Type == IdentityProviderType.OpenIDConnect
                 {
-                    ConfigureOpenIDConnectAuth(authBuilder, application, idp);
+                    // TODO claims management
+                    ConfigureOpenIDConnectAuth(authBuilder, application, idp, retainWebToken, retainApiToken);
                 }
             }
         }
@@ -277,7 +289,7 @@ namespace OAKProxy
             }
         }
 
-        private static void ConfigureAzureADAuthOptions(IServiceCollection services, ProxyApplication application, string[] additionalClaimsRetained)
+        private static void ConfigureAzureADAuthOptions(IServiceCollection services, ProxyApplication application, string[] additionalClaimsRetained, bool retainWebToken, bool retainApiToken)
         {
             var schemes = ProxyAuthComponents.GetAuthSchemes(application);
 
@@ -285,6 +297,7 @@ namespace OAKProxy
             {
                 services.Configure<JwtBearerOptions>(schemes.JwtBearerName, options =>
                 {
+                    options.SaveToken = retainApiToken;
                     options.TokenValidationParameters.ValidAudiences = new string[] { application.IdentityProviderBinding.AppIdUri };
                     options.TokenValidationParameters.AuthenticationType = ProxyAuthComponents.ApiAuth;
                     options.TokenValidationParameters.RoleClaimType = AzureADClaims.Roles;
@@ -337,6 +350,7 @@ namespace OAKProxy
                     }
                     options.ClaimActions.DeleteClaims(stripClaims.ToArray());
 
+                    options.SaveTokens = retainWebToken;
                     options.TokenValidationParameters.AuthenticationType = ProxyAuthComponents.WebAuth;
                     options.TokenValidationParameters.RoleClaimType = AzureADClaims.Roles;
                     options.TokenValidationParameters.NameClaimType = AzureADClaims.UserPrincipalName;
@@ -357,7 +371,7 @@ namespace OAKProxy
             }
         }
 
-        private static void ConfigureOpenIDConnectAuth(AuthenticationBuilder authBuilder, ProxyApplication application, IdentityProvider idp)
+        private static void ConfigureOpenIDConnectAuth(AuthenticationBuilder authBuilder, ProxyApplication application, IdentityProvider idp, bool retainWebToken, bool retainApiToken)
         {
             var schemes = ProxyAuthComponents.GetAuthSchemes(application);
 
@@ -372,6 +386,7 @@ namespace OAKProxy
                     }
                     
                     options.Audience = application.IdentityProviderBinding.ClientId;
+                    options.SaveToken = retainApiToken;
                     options.TokenValidationParameters.ValidAudiences = new string[] { application.IdentityProviderBinding.AppIdUri };
                     options.TokenValidationParameters.AuthenticationType = ProxyAuthComponents.ApiAuth;
                     options.SecurityTokenValidators.Clear();
@@ -393,6 +408,7 @@ namespace OAKProxy
                     options.SignedOutCallbackPath = ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.SignedOutCallback);
                     options.SignInScheme = schemes.WebName;
                     options.UseTokenLifetime = true;
+                    options.SaveTokens = retainWebToken;
                     options.TokenValidationParameters.AuthenticationType = ProxyAuthComponents.WebAuth;
                     options.RemoteSignOutPath = ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.RemoteSignOut);
                     options.SecurityTokenValidator = new JwtSecurityTokenHandler

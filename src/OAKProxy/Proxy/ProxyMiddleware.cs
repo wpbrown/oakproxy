@@ -102,6 +102,7 @@ namespace OAKProxy.Proxy
             foreach (var header in request.Headers)
             {
                 if (header.Key.Equals(HeaderNames.Host, StringComparison.InvariantCultureIgnoreCase) ||
+                    header.Key.Equals(HeaderNames.Authorization, StringComparison.InvariantCultureIgnoreCase) ||
                     (needToStripCookie && header.Key.Equals(HeaderNames.Cookie, StringComparison.InvariantCultureIgnoreCase)) ||
                     header.Key.StartsWith("X-Forwarded-", StringComparison.InvariantCultureIgnoreCase) ||
                     header.Key.StartsWith("X-Original-", StringComparison.InvariantCultureIgnoreCase))

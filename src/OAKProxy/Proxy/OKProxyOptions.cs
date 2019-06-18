@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using OAKProxy.Authenticator.Bearer;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
@@ -143,6 +144,11 @@ namespace OAKProxy.Proxy
         [ValidateCollection]
         public HeaderDefinition[] HeaderDefinitions { get; set; }
 
+        // Bearer
+        public bool PassWebIdToken { get; set; }
+
+        public bool PassApiAccessToken { get; set; }
+
         public Type ImplType
         {
             get
@@ -153,6 +159,8 @@ namespace OAKProxy.Proxy
                         return typeof(KerberosAuthenticator);
                     case AuthenticatorType.Headers:
                         return typeof(HeadersAuthenticator);
+                    case AuthenticatorType.Bearer:
+                        return typeof(BearerAuthenticator);
                     default:
                         throw new Exception("Unknown authenticator type.");
                 }
@@ -404,7 +412,8 @@ namespace OAKProxy.Proxy
     public enum AuthenticatorType
     {
         Kerberos,
-        Headers
+        Headers,
+        Bearer
     }
 
     public enum ClaimsProviderType
