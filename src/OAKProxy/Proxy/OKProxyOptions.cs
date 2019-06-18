@@ -261,6 +261,7 @@ namespace OAKProxy.Proxy
 
         public bool DisableImplicitIdToken { get; set; }
 
+        // Azure AD Options
         public bool UseApplicationMetadata { get; set; }
 
         public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
@@ -337,6 +338,10 @@ namespace OAKProxy.Proxy
         public bool WebRequireRoleClaim { get; set; }
 
         public SameSiteMode? SessionCookieSameSiteMode { get; set; }
+
+        public string[] SessionCookieStrippedClaims { get; set; }
+
+        public string[] SessionCookieRetainedClaims { get; set; }
 
         public PathAuthOptions.AuthMode? GetPathMode(PathString path)
         {

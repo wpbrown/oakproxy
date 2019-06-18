@@ -27,6 +27,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace OAKProxy
@@ -35,10 +36,12 @@ namespace OAKProxy
     {
         private readonly IConfiguration _configuration;
         private readonly ApplicationOptions _options;
+        private readonly ILogger<Startup> _logger;
 
         public Startup(IConfiguration configuration, IOptions<ApplicationOptions> options, ILogger<Startup> logger)
         {
             _configuration = configuration;
+            _logger = logger;
 
             try
             {
@@ -191,15 +194,52 @@ namespace OAKProxy
             foreach (var application in _options.Applications)
             {
                 var idp = _options.IdentityProviders.Single(i => i.Name == application.IdentityProviderBinding.Name);
+                var additionalClaimsRetained = GetAllNeededClaims(application, _options);
+                if (additionalClaimsRetained != null)
+                {
+                    _logger.LogInformation("These claims will be automatically retained for application '{Application}': {Claims}.", application.Name, String.Join(", ", additionalClaimsRetained));
+                }
+
                 if (idp.Type == IdentityProviderType.AzureAD)
                 {
-                    ConfigureAzureADAuthOptions(services, application);
+                    ConfigureAzureADAuthOptions(services, application, additionalClaimsRetained);
                 }
                 else // idp.Type == IdentityProviderType.OpenIDConnect
                 {
                     ConfigureOpenIDConnectAuth(authBuilder, application, idp);
                 }
             }
+        }
+
+        private static readonly Regex claimRegex = new Regex(@"(?:^|\b)c\[""(.+?)""\]", RegexOptions.Compiled);
+        private string[] GetAllNeededClaims(ProxyApplication application, ApplicationOptions options)
+        {
+            var headerAuthenticators  = application.AuthenticatorBindings?
+                .Select(b => options.Authenticators.Single(a => a.Name == b.Name))
+                .Where(a => a.Type == AuthenticatorType.Headers);
+
+            if (headerAuthenticators?.Count() > 0)
+            {
+                var claims = new List<string>();
+                foreach (var definition in headerAuthenticators.SelectMany(headerOptions => headerOptions.HeaderDefinitions))
+                {
+                    if (definition.ClaimName != null)
+                    {
+                        claims.Add(definition.ClaimName);
+                    }
+                    else
+                    {
+                        var matches = claimRegex.Matches(definition.Expression);
+                        claims.AddRange(matches.Select(m => m.Groups[1].Value));
+                    }
+                }
+                if (claims.Count > 0)
+                {
+                    return claims.ToArray();
+                }
+            }
+
+            return null;
         }
 
         private static void ConfigureAzureADAuth(AuthenticationBuilder authBuilder, ProxyApplication application, IdentityProvider idp)
@@ -237,7 +277,7 @@ namespace OAKProxy
             }
         }
 
-        private static void ConfigureAzureADAuthOptions(IServiceCollection services, ProxyApplication application)
+        private static void ConfigureAzureADAuthOptions(IServiceCollection services, ProxyApplication application, string[] additionalClaimsRetained)
         {
             var schemes = ProxyAuthComponents.GetAuthSchemes(application);
 
@@ -274,7 +314,28 @@ namespace OAKProxy
 
                 services.Configure<OpenIdConnectOptions>(schemes.OpenIdName, options =>
                 {
-                    options.ClaimActions.DeleteClaims("aio", "family_name", "given_name", "name", "tid", "unique_name", "uti");
+                    var stripClaims = new List<string> { "aio", "family_name", "given_name", "name", "tid", "unique_name", "uti" };
+                    if (additionalClaimsRetained != null)
+                    {
+                        foreach (var claim in additionalClaimsRetained)
+                        {
+                            options.ClaimActions.Remove(claim);
+                        }
+                        stripClaims = stripClaims.Except(additionalClaimsRetained).ToList();
+                    }
+                    if (application.SessionCookieRetainedClaims != null)
+                    {
+                        foreach (var claim in application.SessionCookieRetainedClaims)
+                        {
+                            options.ClaimActions.Remove(claim);
+                        }
+                        stripClaims = stripClaims.Except(application.SessionCookieRetainedClaims).ToList();
+                    }
+                    if (application.SessionCookieStrippedClaims != null)
+                    {
+                        stripClaims.AddRange(application.SessionCookieStrippedClaims);
+                    }
+                    options.ClaimActions.DeleteClaims(stripClaims.ToArray());
 
                     options.TokenValidationParameters.AuthenticationType = ProxyAuthComponents.WebAuth;
                     options.TokenValidationParameters.RoleClaimType = AzureADClaims.Roles;
