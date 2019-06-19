@@ -76,6 +76,7 @@ Header-based Authentication | Yes | With Ping Access
     - [Service Principal Mapping Object](#Service-Principal-Mapping-Object)
     - [Headers Authenticator Object](#Headers-Authenticator-Object)
     - [Headers Definition Object](#Headers-Definition-Object)
+    - [Bearer Authenticator Object](#Bearer-Authenticator-Object)
     - [Application Object](#Application-Object)
     - [Path Authentication Option Object](#Path-Authentication-Option-Object)
     - [Azure AD Identity Provider Binding Object](#Azure-AD-Identity-Provider-Binding-Object)
@@ -484,6 +485,15 @@ Name | Default | Description
 ClaimName | *optional* | The name of a claim in the incoming JWT that will supply the value of the header. *One of either ClaimName or Expression is required.*
 Expression  | *optional* | An expression that returns the string value of the header. See [header expressions](#header-expressions) for more details *One of either ClaimName or Expression is required.*
 Required | `false` | When `true`, if using ClaimName, fail the request if the named claim is not in the JWT. If using Expression, fail the request if the expression returns `null` or throws an exception.
+
+### Bearer Authenticator Object
+
+Name | Default | Description
+--- | --- | ---
+**Type** | *required* | Must be `Bearer`.
+**Name** | *required* | An alphanumeric  name for the object.
+PassWebIdToken  | `false` | When the user is authenticated to a `Web` path using OIDC, pass the id_token as a bearer token to the backend.  *Enabling this option significantly increases the size of the session cookie.* If `ApiAllowWebSession` is enabled, the id_token can also be passed to `Api` paths. 
+PassApiAccessToken   | `false` | When the user is authenticated to an `Api` path using bearer authentication, pass the access_token as a bearer token to the backend.
 
 ### Application Object
 
