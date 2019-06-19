@@ -51,7 +51,14 @@ namespace OAKProxy.Authenticator.Bearer
                 if (tokenType != null)
                 {
                     var tokenValue = tokens.First(t => t.Name == tokenType).Value;
-                    context.Message.Headers.Add(HeaderNames.Authorization, $"Bearer {tokenValue}");
+                    if (Options.HeaderName != null)
+                    {
+                        context.Message.Headers.Add(Options.HeaderName.Trim(), tokenValue);
+                    }
+                    else
+                    {
+                        context.Message.Headers.Add(HeaderNames.Authorization, $"Bearer {tokenValue}");
+                    } 
                 }
 
                 return base.SendAsyncAuthenticator(context, cancellationToken);

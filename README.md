@@ -494,6 +494,7 @@ Name | Default | Description
 **Name** | *required* | An alphanumeric  name for the object.
 PassWebIdToken  | `false` | When the user is authenticated to a `Web` path using OIDC, pass the id_token as a bearer token to the backend.  *Enabling this option significantly increases the size of the session cookie.* If `ApiAllowWebSession` is enabled, the id_token can also be passed to `Api` paths. 
 PassApiAccessToken   | `false` | When the user is authenticated to an `Api` path using bearer authentication, pass the access_token as a bearer token to the backend.
+HeaderName | *optional* | By default the token will be emitted with the format `Authorization: Bearer {token}`. If this value is supplied the format is: `{HeaderName}: {token}`.
 
 ### Application Object
 

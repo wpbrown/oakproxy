@@ -149,6 +149,8 @@ namespace OAKProxy.Proxy
 
         public bool PassApiAccessToken { get; set; }
 
+        public string HeaderName { get; set; }
+
         public Type ImplType
         {
             get
