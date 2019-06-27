@@ -1,3 +1,5 @@
+\*\* This sub-project is in the process of being migrated/rebuilt in to the [Azure Enterprise Lab](https://github.com/wpbrown/azentlab). \*\*
+
 # The Lab
 The `lab.json` and `labconfig.ps1` files make it easy to deploy a fully functional dev/test environment for oakproxy (or any other AD DS work) in Azure.
 
