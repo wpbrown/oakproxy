@@ -77,6 +77,6 @@ Supported IdPs | Any OIDC | Azure AD
 * [Documentation](https://github.com/wpbrown/oakproxy/blob/master/docs/README.md)
 * [Downloads](https://github.com/wpbrown/oakproxy/releases)
 * [Official Docker Images](https://hub.docker.com/r/rebeagle/oakproxy)
-* [Development Lab](https://github.com/wpbrown/oakproxy/tree/master/testenv)
+* [Development Lab](https://github.com/wpbrown/azentlab)
 * [Project Roadmap](https://github.com/wpbrown/oakproxy/projects/2)
 * [Wiki](https://github.com/wpbrown/oakproxy/wiki)
