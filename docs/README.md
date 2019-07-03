@@ -33,17 +33,24 @@
     - [Azure Key Vault Object](#Azure-Key-Vault-Object)
     - [Certificate File Object](#Certificate-File-Object)
     - [Certificate Store Reference Object](#Certificate-Store-Reference-Object)
+    - [Key Management Object](#Key-Management-Object)
+    - [DPAPI NG Options Object](#DPAPI-NG-Options-Object)
     - [Azure AD Identity Provider Object](#Azure-AD-Identity-Provider-Object)
+    - [OpenID Connect Identity Provider Object](#OpenID-Connect-Identity-Provider-Object)
     - [Kerberos Authenticator Object](#Kerberos-Authenticator-Object)
-    - [Service Principal Mapping Object](#Service-Principal-Mapping-Object)
     - [Headers Authenticator Object](#Headers-Authenticator-Object)
     - [Headers Definition Object](#Headers-Definition-Object)
     - [Bearer Authenticator Object](#Bearer-Authenticator-Object)
+    - [Domain UPN Claim Provider Object](#Domain-UPN-Claim-Provider-Object)
+    - [Service Principal Mapping Object](#Service-Principal-Mapping-Object)
     - [Application Object](#Application-Object)
     - [Path Authentication Option Object](#Path-Authentication-Option-Object)
     - [Azure AD Identity Provider Binding Object](#Azure-AD-Identity-Provider-Binding-Object)
+    - [OpenID Connect Identity Provider Binding Object](#OpenID-Connect-Identity-Provider-Binding-Object)
     - [Kerberos Authenticator Binding Object](#Kerberos-Authenticator-Binding-Object)
     - [Headers Authenticator Binding Object](#Headers-Authenticator-Binding-Object)
+    - [Bearer Authenticator Binding Object](#Bearer-Authenticator-Binding-Object)
+    - [Directory UPN Claim Provider Binding Object](#Directory-UPN-Claim-Provider-Binding-Object)
     - [Subsystem Configuration](#Subsystem-Configuration)
   - [Header Expressions](#Header-Expressions)
   - [Key Management](#Key-Management)
@@ -366,6 +373,7 @@ Name | Default | Description
 **IdentityProviders** | *required* | An array of at least one identity provider object.
 **Applications** | *required* |  An array of at least one application.
 Authenticators | *optional* |  An array of authenticator object.
+ClaimsProviders | *optional* |  An array of claims provider object.
 Configuration | *optional* | Configuration of ASP.NET Core subsystems.
 
 ### Server Object
@@ -379,15 +387,18 @@ ApplicationInsightsKey | *optional* | If provided, OAKProxy will feed informatio
 EnableHealthChecks | `false` | Listen at `/.oakproxy/health` for health probes from gateways/load-balancers.
 KeyVault | *optional* | A single Azure Key Vault object.
 ConfigureFromKeyVault | `true` | If a Key Vault object is provided, load any available configuration secrets from it. Set to `false` to prevent reading configuration from Key Vault.
+KeyManagement | *optional* | A single Key Management object to configure key management for session cookie encryption. If not provided, [default key management](https://docs.microsoft.com/en-us/aspnet/core/security/data-protection/configuration/default-settings?view=aspnetcore-2.2#key-management) will be used.
 
 ### Azure Key Vault Object
 
 Name | Default | Description
 --- | --- | ---
 **Name** | *required* | The name of the Azure Key Vault (or the full URL).
-ClientId | *optional* | The client ID used for authentication. If provided, `ClientSecret` or `Certificate` is required. If not provided, Manage Identity of the Azure resource the application is running on will be used. If a Managed Identity is not enabled  an error will be thrown.
-ClientSecret | *optional* | The client secret used for authentication. *Either ClientSecret or Certificate is required if ClientId is provided*.
-Certificate | *optional* | A single certificate object used for authentication. *Either ClientSecret or Certificate is required if ClientId is provided*.
+ClientId | *optional* | The client ID used for authentication. 
+ClientSecret | *optional* | The client secret used for authentication. 
+Certificate | *optional* | A single certificate object used for authentication. 
+
+If `ClientId` is provided, `ClientSecret` or `Certificate` is required. If `ClientId` is not provided, the Manage Identity of the Azure resource the application is running on will be used. If a Managed Identity is not enabled, an error will be thrown.
 
 ### Certificate File Object
 
@@ -405,30 +416,54 @@ Name | Default | Description
 Location | `CurrentUser` | The store location to load the certificate from. 
 AllowInvalid | `false` | Set to `true` to permit the use of invalid certificates (for example, self-signed certificates).
 
+### Key Management Object
+
+If this object is not provided, [default key management](https://docs.microsoft.com/en-us/aspnet/core/security/data-protection/configuration/default-settings?view=aspnetcore-2.2#key-management) will be used.
+
+Name | Default | Description
+--- | --- | ---
+StoreToFilePath | *optional* | A full directory path where keys should be stored (this can be a local path or a UNC share path).
+StoreToBlobContainer | *optional* | A full URI with SAS token to an Azure Blob to store the encrypted keys. Managed identity for authentication to storage is [not yet supported](https://github.com/wpbrown/oakproxy/issues/45).
+ProtectWithKeyVaultKey | *optional* | The name of a Key Vault key used to encrypt the session keys. `KeyVault` must be configured on `Server` to use this option.
+ProtectWithCertificate  | *optional* |  A single certificate object used to encrypt the session keys.
+UnprotectWithCertificates | *optional* | An array of one or more certificate objects, which can be used to decrypt existing session keys. This is used to support key rotation.
+ProtectWithDpapiNg  | *optional* | a single DPAPI NG Options object to enable encryption using DPAPI NG (Windows Only).
+
+If a `StoreTo*` option is configured, then a `ProtectWith*` option must also be configured.
+
+### DPAPI NG Options Object
+
+Name | Default | Description
+--- | --- | ---
+UseSelfRule | `false` | Automatically use the SID of the user running the server for the descriptor rule. Typically this would be `true`, especially if running with a gMSA.
+DescriptorRule | *optional* | Provide a [custom descriptor](https://docs.microsoft.com/en-us/windows/desktop/SecCNG/protection-descriptors) if `UseSelfRule` is `false`.
+DescriptorFlags | *optional* | Optional flags to go with a custom `DescriptorRule`.
+
 ### Azure AD Identity Provider Object
 
 Name | Default | Description
 --- | --- | ---
 **Type** | *required* | Must be `AzureAD`.
-**Name** | *required* | An alphanumeric  name for the object.
+**Name** | *required* | An alphanumeric name for the object.
 **Instance** | *required* | The URL for the Azure cloud (typically `https://login.microsoftonline.com/`).
 **TenantId** | *required*  | The UUID for your Azure AD tenant.
+
+### OpenID Connect Identity Provider Object
+
+Name | Default | Description
+--- | --- | ---
+**Type** | *required* | Must be `OpenIDConnect`.
+**Name** | *required* | An alphanumeric name for the object.
+**Authority** | *required* | The URL for the OpenID Connect Authority.
+AccessTokenIssuer | *optional* | If the issuer claim on access tokens is not the Authority, a different valid issuer can be added. This is required in the default configuration of AD FS (i.e. the [federation service identifier has not been changed](https://docs.microsoft.com/en-us/windows-server/identity/ad-fs/technical-reference/how-uris-are-used-in-ad-fs)). [More info](https://github.com/AzureAD/azure-activedirectory-identitymodel-extensions-for-dotnet/issues/1030).
 
 ### Kerberos Authenticator Object
 
 Name | Default | Description
 --- | --- | ---
 **Type** | *required* | Must be `Kerberos`.
-**Name** | *required* | An alphanumeric  name for the object.
-ServicePrincipalMappings | *optional* | An array of service principal mapping objects. Applications connecting that do not have a mapping specified will be denied access even if they have the app_impersonation role.
-SidMatching | `Never` | Users are matched to AD DS users only by UPN by default (`Never`). To only match on SID, first ensure the optional claim is configured and then set SidMatching to `Only`. To match on SID if the claim is present and fallback to UPN match otherwise, set to `First`. This is useful for mixed environments where some users are mastered in AD DS and some in Azure AD. When using `First`, if the SID claim is present but no match is found, this is an error, no fallback to UPN will occur.
-
-### Service Principal Mapping Object
-
-Name | Default | Description
---- | --- | ---
-**ObjectId** | *required* | The object ID of the Azure AD service principal (_not_ the application object ID or app ID).
-**UserPrincipalName** | *required*  | The AD DS UPN of the user, computer, or service account to impersonate.
+**Name** | *required* | An alphanumeric name for the object.
+DomainUpnClaimName | `onprem_upn` | The name of the claim containing the UPN to impersonate in the local AD DS domain. If using an AD FS farm in the AD DS domain or Azure AD without alternate logon ID as the identity provider, this will typically just be the incoming `upn` claim. If using Azure AD with alternate logon ID as the identity provider, the `DirectoryUpnResolver` claims provider can be used to provide this claim.
 
 ### Headers Authenticator Object
 
@@ -457,6 +492,31 @@ PassWebIdToken  | `false` | When the user is authenticated to a `Web` path using
 PassApiAccessToken   | `false` | When the user is authenticated to an `Api` path using bearer authentication, pass the access_token as a bearer token to the backend.
 HeaderName | *optional* | By default the token will be emitted with the format `Authorization: Bearer {token}`. If this value is supplied the format is: `{HeaderName}: {token}`.
 
+### Domain UPN Claim Provider Object
+
+Name | Default | Description
+--- | --- | ---
+**Type** | *required* | Must be `DirectoryUpnResolver`.
+**Name** | *required* | An alphanumeric  name for the object.
+DirectorySidClaimName | `onprem_sid` | The incoming claim that specifies the target AD DS domain user's SID. 
+IdentityProviderUserClaimName  | `upn` | The incoming claim that specifies the UPN in the identity provider (which will be used for the target AD DS domain user if there is no SID match and `SidMatching` is not set to `Only`).
+IdentityProviderApplicationClaimName  | `oid` | The incoming claim that uniquely identifies incoming application principals. This claim is matched against the `ObjectId` value of Service Principal Mapping objects.
+IdentityProviderAnchorClaimName  | `sub` | The unique key used for caching all incoming resolver requests regardless of whether they are from application or user principals.
+OutputClaimName  | `onprem_upn` | The claim emitted by this provider (typically to be consumed by a Kerberos Authenticator).
+DirectoryServerName | *optional* | Name of a specific domain controller or AD LDS server. By default, the default domain controller for the server will be used.
+DirectoryServerUsername  | *optional* | Username to authenticate to the directory server.
+DirectoryServerPassword  | *optional* | Password to authenticate to the directory server.
+DirectoryServerType | `CurrentDomain` | Use `CurrentDomain` to resolve users in the AD DS domain the server is joined to. `LDS` allows lookup in an AD LDS sever.
+ServicePrincipalMappings | *optional* | An array of service principal mapping objects. Applications connecting that do not have a mapping specified will be denied access even if they have the app_impersonation role.
+SidMatching | `Never` | Users are matched to AD DS users only by UPN by default (`Never`). To only match on SID, first ensure the optional claim is configured and then set SidMatching to `Only`. To match on SID if the claim is present and fallback to UPN match otherwise, set to `First`. This is useful for mixed environments where some users are mastered in AD DS and some in Azure AD. When using `First`, if the SID claim is present but no match is found, this is an error, no fallback to UPN will occur.
+
+### Service Principal Mapping Object
+
+Name | Default | Description
+--- | --- | ---
+**ObjectId** | *required* | When the identity provider is Azure AD, by default this should be the object ID of the Azure AD service principal (_not_ the application object ID or app ID). The value matched against this field can be overridden with the `IdentityProviderApplicationClaimName` option.
+**UserPrincipalName** | *required*  | The AD DS UPN of the user, computer, or service account to impersonate.
+
 ### Application Object
 
 Name | Default | Description
@@ -467,6 +527,7 @@ Name | Default | Description
 **Destination** | *required* | The URL for the backend application being proxied. Example: `http://hr.corp.contoso.com/`.
 **PathAuthOptions** | *required* | At least one path authentication option object.
 AuthenticatorBindings | *optional* | An array of authenticator binding objects.
+ClaimsProviderBindings | *optional* | An array of claims provider binding objects.
 ApiAllowWebSession | `false` | For paths configured for `Api` authentication, allow them to also accept a valid pre-established OpenID Connect web session instead of a JWT bearer token. This is useful for supporting legacy applications that make authenticated AJAX calls from their web application.
 WebRequireRoleClaim | `false` | Require the user who logs directly in the application via the web to have the `user_web` role in their token. See [Require User Assignment](#require-user-assignment) for more information.
 SessionCookieSameSiteMode | `Lax` | The SameSite mode to use for the OpenID Connect session cookie. See "Cookie.SameSite" under "AddCookie Options" [here](https://docs.microsoft.com/en-us/aspnet/core/security/authentication/cookie?view=aspnetcore-2.2#configuration) for more information.
@@ -489,6 +550,17 @@ Name | Default | Description
 AppIdUri | *optional* | The identifier URI or "App ID URI" of the application registration in Azure AD. Required if any paths on the application are configured with `Mode: Api`.
 ClientSecret | *optional* | Client secret. Required if `DisableImplicitIdToken` is `true`.
 DisableImplicitIdToken | `false` | Use auth code grant to retrieve an id_token during OpenID Connect authentication. The default behavior is to use an implicit id_token response.
+UseApplicationMetadata | `false` | Set to `true` to use your application's [custom signing keys](https://docs.microsoft.com/en-us/azure/active-directory/develop/active-directory-claims-mapping#custom-signing-key).
+
+### OpenID Connect Identity Provider Binding Object
+
+Name | Default | Description
+--- | --- | ---
+**Name** | *required* | The name of an OpenID Connect identity provider object.
+**ClientId** | *required* | The client ID registered in the identity provider.
+AppIdUri | *optional* | The identifier URI or "App ID URI" of the application in the identity provider. Required if any paths on the application are configured with `Mode: Api`.
+ClientSecret | *optional* | Client secret. Required if `DisableImplicitIdToken` is `true`.
+DisableImplicitIdToken | `false` | Use auth code grant to retrieve an id_token during OpenID Connect authentication. The default behavior is to use an implicit id_token response.
 
 ### Kerberos Authenticator Binding Object
 
@@ -502,6 +574,18 @@ SendAnonymousRequestAsService | false | Send anonymous requests (`Mode` is set t
 Name | Default | Description
 --- | --- | ---
 **Name** | *required* | The name of a Headers authenticator object.
+
+### Bearer Authenticator Binding Object
+
+Name | Default | Description
+--- | --- | ---
+**Name** | *required* | The name of a Bearer authenticator object.
+
+### Directory UPN Claim Provider Binding Object
+
+Name | Default | Description
+--- | --- | ---
+**Name** | *required* | The name of a Directory UPN Claim Provider object.
 
 ### Subsystem Configuration
 
