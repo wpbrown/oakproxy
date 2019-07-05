@@ -1,0 +1,281 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "adminPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Password for the machine built-in Administrator."
+      }
+    },
+    "adminUsername": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Username for the machine built-in Administrator."
+      }
+    },
+    "domainName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the AD DS domain to join the VMs."
+      }
+    },
+    "domainOrganizationalUnit": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the AD DS OU to join the VMs."
+      }
+    },
+    "oakproxyServerGroupName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the AD DS OU to join the VMs."
+      }
+    },
+    "instanceCount": {
+      "type": "int",
+      "metadata": {
+        "description": "Number of VM instances (10 or less)."
+      },
+      "defaultValue": 3,
+      "maxValue": 10
+    },
+    "domainJoinPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Password for the user that has rights to join the VMs."
+      }
+    },
+    "domainJoinUsername": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Username for the user that has rights to join the VMs."
+      }
+    },
+    "virtualNetworkResourceGroup": {
+      "type": "string",
+      "defaultValue": "[resourceGroup()]",
+      "metadata": {
+        "description": "Address space for the lab network."
+      }
+    },
+    "virtualNetworkName": {
+      "type": "string",
+      "metadata": {
+        "description": "Address space for the lab network."
+      }
+    },
+    "virtualNetworkSubnetName": {
+      "type": "string",
+      "metadata": {
+        "description": "Address space for the lab network."
+      }
+    },
+    "domainHostNamePrefix": {
+      "type": "string",
+      "defaultValue": "azoakserv",
+      "metadata": {
+        "description": "Address space for the lab network."
+      }
+    },
+    "hybridUseLicense": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Address space for the lab network."
+      }
+    },
+    "vmSize": {
+      "type": "string",
+      "defaultValue": "Standard_D2s_v3",
+      "metadata": {
+        "description": "Address space for the lab network."
+      }
+    },
+    "diskSku": {
+      "type": "string",
+      "defaultValue": "Premium_LRS",
+      "metadata": {
+        "description": "Address space for the lab network."
+      }
+    },
+    "_artifactsLocation": {
+      "type": "string",
+      "metadata": {
+        "description": "The base URI where artifacts required by this template are located including a trailing '/'"
+      },
+      "defaultValue": "https://github.com/wpbrown/oakproxy/releases/download/"
+    },
+    "_artifactsLocationSasToken": {
+      "type": "securestring",
+      "metadata": {
+        "description": "The sasToken required to access _artifactsLocation.  When the template is deployed using the accompanying scripts, a sasToken will be automatically generated. Use the defaultValue if the staging location is not secured."
+      },
+      "defaultValue": ""
+    }
+  },
+  "variables": {
+    "serverImage": {
+      "publisher": "MicrosoftWindowsServer",
+      "offer": "WindowsServer",
+      "sku": "2019-Datacenter-smalldisk",
+      "version": "latest"
+    }
+  },
+  "resources": [
+    {
+      "apiVersion": "2018-06-01",
+      "type": "Microsoft.Compute/virtualMachineScaleSets",
+      "name": "oakproxy-vmss",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "oakproxy-lb"
+      ],
+      "sku": {
+        "name": "[parameters('vmSize')]",
+        "capacity": "[parameters('instanceCount')]"
+      },
+      "properties": {
+        "overprovision": false,
+        "upgradePolicy": {
+          "mode": "Manual"
+        },
+        "virtualMachineProfile": {
+          "osProfile": {
+            "computerNamePrefix": "[parameters('domainHostNamePrefix')]",
+            "adminUsername": "[parameters('adminUsername')]",
+            "adminPassword": "[parameters('adminPassword')]"
+          },
+          "storageProfile": {
+            "imageReference": "[variables('serverImage')]",
+            "osDisk": {
+              "diffDiskSettings": {
+                "option": "Local"
+              },
+              "caching": "ReadOnly",
+              "createOption": "FromImage"
+            }
+          },
+          "networkProfile": {
+            "networkInterfaceConfigurations": [
+              {
+                "name": "nic",
+                "properties": {
+                  "primary": true,
+                  "ipConfigurations": [
+                    {
+                      "name": "ipconfig",
+                      "properties": {
+                        "subnet": {
+                          "id": "[resourceId(parameters('virtualNetworkResourceGroup'), 'Microsoft.Network/virtualNetworks/subnets', parameters('virtualNetworkName'), parameters('virtualNetworkSubnetName'))]"
+                        },
+                        "loadBalancerBackendAddressPools": [
+                          {
+                            "id": "[resourceId('Microsoft.Network/loadBalancers/backendAddressPools', 'oakproxy-lb', 'oakproxy-lb-bap')]"
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          "extensionProfile": {
+            "extensions": [
+              {
+                "name": "Microsoft.Powershell.DSC",
+                "properties": {
+                  "publisher": "Microsoft.Powershell",
+                  "type": "DSC",
+                  "typeHandlerVersion": "2.77",
+                  "autoUpgradeMinorVersion": true,
+                  "settings": {
+                    "configuration": {
+                      "url": "[uri(parameters('_artifactsLocation'), 'oakproxyconfiguration.ps1.zip')]",
+                      "script": "oakproxyconfiguration.ps1",
+                      "function": "OakproxyConfiguration"
+                    },
+                    "configurationArguments": {
+                      "DomainName": "[parameters('domainName')]",
+                      "DomainOrganizationalUnit": "[parameters('domainOrganizationalUnit')]",
+                      "DomainGroupName": "[parameters('oakproxyServerGroupName')]"
+                    }
+                  },
+                  "protectedSettings": {
+                    "configurationArguments": {
+                      "DomainJoinCredential": {
+                        "userName": "[parameters('domainJoinUsername')]",
+                        "Password": "[parameters('domainJoinPassword')]"
+                      }
+                    },
+                    "configurationUrlSasToken": "[parameters('_artifactsLocationSasToken')]"
+                  }
+                }
+              }
+            ]
+          },
+          "licenseType": "[if(parameters('hybridUseLicense'), 'Windows_Server', json('null'))]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Network/loadBalancers",
+      "name": "oakproxy-lb",
+      "location": "[resourceGroup().location]",
+      "apiVersion": "2019-04-01",
+      "dependsOn": [],
+      "properties": {
+        "frontendIPConfigurations": [
+          {
+            "name": "oakproxy-lb-fipc",
+            "properties": {
+              "privateIPAllocationMethod": "Dynamic",
+              "subnet": {
+                "id": "[resourceId(parameters('virtualNetworkResourceGroup'), 'Microsoft.Network/virtualNetworks/subnets', parameters('virtualNetworkName'), parameters('virtualNetworkSubnetName'))]"
+              }
+            }
+          }
+        ],
+        "backendAddressPools": [
+          {
+            "name": "oakproxy-lb-bap"
+          }
+        ],
+        "loadBalancingRules": [
+          {
+            "name": "roundRobinLBRule",
+            "properties": {
+              "frontendIPConfiguration": {
+                "id": "[resourceId('Microsoft.Network/loadBalancers/frontendIPConfigurations', 'oakproxy-lb', 'oakproxy-lb-fipc')]"
+              },
+              "backendAddressPool": {
+                "id": "[resourceId('Microsoft.Network/loadBalancers/backendAddressPools', 'oakproxy-lb', 'oakproxy-lb-bap')]"
+              },
+              "protocol": "Tcp",
+              "frontendPort": 80,
+              "backendPort": 80,
+              "idleTimeoutInMinutes": 5,
+              "probe": {
+                "id": "[resourceId('Microsoft.Network/loadBalancers/probes', 'oakproxy-lb', 'oakproxy-lb-probe')]"
+              }
+            }
+          }
+        ],
+        "probes": [
+          {
+            "name": "oakproxy-lb-probe",
+            "properties": {
+              "protocol": "Http",
+              "port": 80,
+              "intervalInSeconds": 5,
+              "numberOfProbes": 2,
+              "requestPath": "/.oakproxy/health"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "outputs": {}
+}

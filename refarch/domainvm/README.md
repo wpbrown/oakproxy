@@ -7,30 +7,47 @@ It can be deployed for internal corporate network use, or presented to the inter
 # Prerequisites
 
 * A VNet on the corporate network routing domain (i.e. a "VDC spoke" or a VNet with a VPN or ExpressRoute gateway).
-* An AD DS account credential that can join VMs to the domain.
+* An AD DS OU to place the server computer objects.
+* An AD DS security group to contain the server computer objects.
+* An AD DS account that can join VMs in the OU and update the group.
 * An AD DS domain with a [KDS Root Key](https://docs.microsoft.com/en-us/windows-server/security/group-managed-service-accounts/create-the-key-distribution-services-kds-root-key) (to support the use of a gMSA).
 * A gMSA account that will run the OAKProxy service on the domain VMs.
-* Pre-staged computer objects for the VMs that will be joined to the domain.
 * List of the SPNs for the Kerberos applications that OAKProxy will front.
 
-## Create the computer objects
+## Create the AD DS structure
 
-There will be 3 VMs hosting OAKProxy. They use names of your choosing. Customize as appropriate for your domain machine naming and placement policy.
+First create the OU and group. Ideally the parent OU has minimal Group Policy linked, but at least has policy to enforce highly restricted access. Customize as appropriate for your domain naming and placement policies.
 
 ```powershell
-$computerNames = @('azeastoak01', 'azeastoak02', 'azeastoak03')
-$targetOu = 'OU=Privileged Servers,DC=corp,DC=contoso,DC=com'
+$OUName = 'OAKProxy Servers'
 $groupName = 'azeastoak-all'
 $groupDescription = 'OAKProxy Azure East Cluster'
+$parentOU = 'OU=Privileged Servers,DC=corp,DC=contoso,DC=com'
 
-$computers = $computerNames | ForEach-Object {
-    New-ADComputer -Name $_ -Path $targetOu -PassThru
-}
-$group = New-ADGroup -Name $groupName -Description $groupDescription -GroupScope Global -Path $targetOu -PassThru
-$computers | Add-ADPrincipalGroupMembership -MemberOf $group
+$group = New-ADGroup -Name $groupName -Description $groupDescription -GroupScope Global -Path $parentOU
+$ou = New-ADOrganizationalUnit -Name $OUName -Path $parentOU -PassThru
 ```
 
-The account used in the template to join the new VMs to the domain needs write access to these pre-staged computer objects.
+The account used in the template to join the new VMs to the domain needs write access to these pre-staged computer objects. It is recommended to create a least privilege user account for this.
+
+```powershell
+$accountName = 'xsoakproxymanage'
+$parentOU = 'OU=Privileged Users,DC=corp,DC=contoso,DC=com'
+$credential = Get-Credential -UserName $accountName -Message 'Provide the password...'
+$user New-ADUser -Name $accountName -AccountNotDelegated $true -PasswordNeverExpires $true `
+    -Path $parentOU -UserPrincipalName 'xsoakproxymanage@corp.contoso.com' `
+    -Enabled $true -AccountPassword $credential.Password -PassThru
+
+$acl = Get-Acl -Path "AD:\$($ou.DistinguishedName)"
+$securityIdentifier = [System.Security.Principal.SecurityIdentifier]::new($user.SID)
+$fullControlComputers = [System.DirectoryServices.ActiveDirectoryAccessRule]::new()
+$createDeleteComputers = [System.DirectoryServices.ActiveDirectoryAccessRule]::new()
+$manageGroupMembers = [System.DirectoryServices.ActiveDirectoryAccessRule]::new()
+$acl.AddAccessRule($ace1)
+$acl.AddAccessRule($ace2)
+$acl.AddAccessRule($ace3)
+Set-Acl -Path "AD:\$($ou.DistinguishedName)" -AclObject $acl
+```
 
 ## Create the gMSA
 
@@ -55,3 +72,12 @@ TODO
 
 1. Populate the `parameter.json`.
 2. Deploy the `azuredeploy.json`.
+
+# DevOps Integration
+
+On going operations and maintenance of the service should follow a 
+
+## Constrained Delegation ACL
+
+The maintenance of the domain records will likely be integrated with an existing DevOps/IaC process for configuration of AD DS. In large organizations, this process may be owned by a completely different team than the one maintaining OAKProxy infrastructure.
+
