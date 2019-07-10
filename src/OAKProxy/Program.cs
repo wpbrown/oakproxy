@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Hosting.WindowsServices;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.EventLog;
 using Microsoft.Extensions.Options;
@@ -26,10 +27,10 @@ namespace OAKProxy
         {
             TypeDescriptor.AddAttributes(typeof(HostString), new TypeConverterAttribute(typeof(HostStringTypeConverter)));
             var assembly = Assembly.GetEntryAssembly();
-            var build = assembly.GetCustomAttribute<AssemblyFileVersionAttribute>().Version;
+            var build = assembly.GetCustomAttribute<AssemblyDescriptionAttribute>().Description;
             var version = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>().InformationalVersion;
             var title = assembly.GetCustomAttribute<AssemblyTitleAttribute>().Title;
-            var banner = $"Starting {title} version {version} build {build}.";
+            var banner = $"Starting {title} version {version} {build}.";
 
             bool isWindows = IsWindows();
             bool isService = isWindows && args.Contains("-service");
@@ -71,7 +72,7 @@ namespace OAKProxy
             return new WebHostBuilder()
                 .UseUrls(hostConfig.GetValue("Server:Urls", "http://*:9000"))
                 .UseContentRoot(Directory.GetCurrentDirectory())
-                .UseConfigurationSection(hostConfig.GetSection("Configuration:Host"))
+                .UseConfiguration(hostConfig.GetSection("Configuration:Host"))
                 .ConfigureAppConfiguration((hostingContext, config) =>
                 {
                     var env = hostingContext.HostingEnvironment;
@@ -259,26 +260,6 @@ namespace OAKProxy
                     }
                 }
             }
-        }
-    }
-
-    // Temporary until ASP.Net Core 3.0
-    public static class WebHostConfigurationSection
-    {
-        /// <summary>
-        /// Use the given configuration settings on the web host. Compatible with the configuration section.
-        /// </summary>
-        /// <param name="hostBuilder">The <see cref="IWebHostBuilder"/> to configure.</param>
-        /// <param name="configuration">The <see cref="IConfiguration"/> containing settings to be used.</param>
-        /// <returns>The <see cref="IWebHostBuilder"/>.</returns>
-        public static IWebHostBuilder UseConfigurationSection(this IWebHostBuilder hostBuilder, IConfiguration configuration)
-        {
-            foreach (var setting in configuration.AsEnumerable(makePathsRelative: true))
-            {
-                hostBuilder.UseSetting(setting.Key, setting.Value);
-            }
-
-            return hostBuilder;
         }
     }
 }

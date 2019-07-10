@@ -12,6 +12,8 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Azure.KeyVault;
 using Microsoft.Azure.Services.AppAuthentication;
+using Microsoft.Azure.Storage.Auth;
+using Microsoft.Azure.Storage.Blob;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http;
@@ -28,6 +30,7 @@ using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace OAKProxy
@@ -105,9 +108,26 @@ namespace OAKProxy
                 }
                 else if (!String.IsNullOrEmpty(kmOptions.StoreToBlobContainer))
                 {
-                    // Upgrade to support Managed Identity after .NET Core 3.0. This API is updated to use
-                    // new storage SDK in 3.0.
-                    dataProtectionBuilder.PersistKeysToAzureBlobStorage(new Uri(kmOptions.StoreToBlobContainer));
+                    var blobUri = new Uri(kmOptions.StoreToBlobContainer);
+                    if (String.IsNullOrEmpty(blobUri.Query))
+                    {
+                        var azureServiceTokenProvider = new AzureServiceTokenProvider();
+                        var tokenAndFrequency = StorageTokenRenewerAsync(azureServiceTokenProvider, CancellationToken.None)
+                            .GetAwaiter().GetResult();
+
+                        TokenCredential tokenCredential = new TokenCredential(tokenAndFrequency.Token,
+                                                                              StorageTokenRenewerAsync,
+                                                                              azureServiceTokenProvider,
+                                                                              tokenAndFrequency.Frequency.Value);
+
+                        var storageCredentials = new StorageCredentials(tokenCredential);
+                        var cloudBlockBlob = new CloudBlockBlob(blobUri, storageCredentials);
+                        dataProtectionBuilder.PersistKeysToAzureBlobStorage(cloudBlockBlob);
+                    }
+                    else
+                    {
+                        dataProtectionBuilder.PersistKeysToAzureBlobStorage(blobUri);
+                    }
                 }
 
                 if (!String.IsNullOrEmpty(kmOptions.ProtectWithKeyVaultKey))
@@ -174,23 +194,26 @@ namespace OAKProxy
             services.AddHealthChecks();
         }
 
+        private static async Task<NewTokenAndFrequency> StorageTokenRenewerAsync(object state, CancellationToken cancellationToken)
+        {
+            const string StorageResource = "https://storage.azure.com/";
+
+            var authResult = await ((AzureServiceTokenProvider)state).GetAuthenticationResultAsync(StorageResource, null, cancellationToken);
+
+            TimeSpan next = (authResult.ExpiresOn - DateTimeOffset.UtcNow) - TimeSpan.FromMinutes(5);
+            if (next.Ticks < 0)
+            {
+                next = default;
+            }
+
+            return new NewTokenAndFrequency(authResult.AccessToken, next);
+        }
+
         private void ConfigureAuthentication(IServiceCollection services)
         {
             services.AddScoped<IAuthenticationHandlerProvider, FilteredAuthenticationHandlerProvider>();
 
             var authBuilder = services.AddAuthentication();
-            foreach (var application in _options.Applications)
-            {
-                var idp = _options.IdentityProviders.Single(i => i.Name == application.IdentityProviderBinding.Name);
-                if (idp.Type == IdentityProviderType.AzureAD)
-                {
-                    ConfigureAzureADAuth(authBuilder, application, idp);
-                }
-            }
-
-            // Additional configuration is done after all AzureAD configuration due to a bug fixed in ASP.NET Core 3.0:
-            // https://github.com/aspnet/AspNetCore/commit/23c528c176e654e14cf5d078558420e00154d0e6
-            // Remerge this logic to the loop function above after migration to 3.0.
             foreach (var application in _options.Applications)
             {
                 var idp = _options.IdentityProviders.Single(i => i.Name == application.IdentityProviderBinding.Name);
@@ -213,6 +236,7 @@ namespace OAKProxy
 
                 if (idp.Type == IdentityProviderType.AzureAD)
                 {
+                    ConfigureAzureADAuth(authBuilder, application, idp);
                     ConfigureAzureADAuthOptions(services, application, additionalClaimsRetained, retainWebToken, retainApiToken);
                 }
                 else // idp.Type == IdentityProviderType.OpenIDConnect
@@ -507,14 +531,8 @@ namespace OAKProxy
             });
         }
 
-        public void Configure(IApplicationBuilder app, IApplicationLifetime host)
+        public void Configure(IApplicationBuilder app)
         {
-            if (_options is null)
-            {
-                host.StopApplication();
-                return;
-            }
-
             var authenticatorWarmup = Task.Run(() => app.ApplicationServices.GetService<IAuthenticatorProvider>());
 
             if (_options.Server.EnableHealthChecks)

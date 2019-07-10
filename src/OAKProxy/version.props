@@ -1,7 +1,8 @@
 ﻿<Project>
   <PropertyGroup>
-    <Version>0.1.3</Version>
-    <FileVersion Condition=" '$(BUILD_BUILDID)' == '' ">developer</FileVersion>
-    <FileVersion Condition=" '$(BUILD_BUILDID)' != '' ">pipeline-$(BUILD_BUILDID)</FileVersion>
+    <Version>0.3.0</Version>
+    <Description Condition=" '$(BUILD_BUILDID)' == '' ">Developer Build</Description>
+    <Description Condition=" '$(BUILD_BUILDID)' != '' ">Official Build $(BUILD_BUILDID)</Description>
+    <FileVersion Condition=" '$(BUILD_BUILDID)' != '' ">$(Version).$(BUILD_BUILDID)</FileVersion>
   </PropertyGroup>
 </Project>
