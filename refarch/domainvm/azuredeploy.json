@@ -9,7 +9,7 @@
       }
     },
     "adminUsername": {
-      "type": "securestring",
+      "type": "string",
       "metadata": {
         "description": "Username for the machine built-in Administrator."
       }
@@ -32,6 +32,12 @@
         "description": "Name of the AD DS OU to join the VMs."
       }
     },
+    "oakproxyGmsaName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the AD DS OU to join the VMs."
+      }
+    },
     "instanceCount": {
       "type": "int",
       "metadata": {
@@ -47,7 +53,7 @@
       }
     },
     "domainJoinUsername": {
-      "type": "securestring",
+      "type": "string",
       "metadata": {
         "description": "Username for the user that has rights to join the VMs."
       }
@@ -85,6 +91,18 @@
         "description": "Address space for the lab network."
       }
     },
+    "accessMode": {
+      "type": "string",
+      "defaultValue": "Public",
+      "allowedValues": [
+        "Public",
+        "Private",
+        "Both"
+      ],
+      "metadata": {
+        "description": "."
+      }
+    },
     "vmSize": {
       "type": "string",
       "defaultValue": "Standard_D2s_v3",
@@ -92,11 +110,18 @@
         "description": "Address space for the lab network."
       }
     },
-    "diskSku": {
+    "oakproxyVersion": {
       "type": "string",
-      "defaultValue": "Premium_LRS",
+      "defaultValue": "v0.1.3",
       "metadata": {
-        "description": "Address space for the lab network."
+        "description": "."
+      }
+    },
+    "vmConfigurationVersion": {
+      "type": "string",
+      "defaultValue": "v1.0.0",
+      "metadata": {
+        "description": "."
       }
     },
     "_artifactsLocation": {
@@ -112,6 +137,45 @@
         "description": "The sasToken required to access _artifactsLocation.  When the template is deployed using the accompanying scripts, a sasToken will be automatically generated. Use the defaultValue if the staging location is not secured."
       },
       "defaultValue": ""
+    },
+    "oakproxyConfigurationUrl": {
+      "type": "string",
+      "defaultValue": "[uri(parameters('_artifactsLocation'), 'oakproxy.yml')]",
+      "metadata": {
+        "description": "."
+      }
+    },
+    "applicationGatewayCapacity": {
+      "type": "int",
+      "defaultValue": 1
+    },
+    "applicationGatewaySubnetName": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Address space for the lab network."
+      }
+    },
+    "applicationGatewaySslCertData": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Address space for the lab network."
+      }
+    },
+    "applicationGatewaySslCertPassword": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Address space for the lab network."
+      }
+    },
+    "applicationGatewayDnsLabel": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Address space for the lab network."
+      }
     }
   },
   "variables": {
@@ -120,7 +184,19 @@
       "offer": "WindowsServer",
       "sku": "2019-Datacenter-smalldisk",
       "version": "latest"
-    }
+    },
+    "publicAccessMode": "[not(equals('Private', parameters('accessMode')))]",
+    "privateAccessMode": "[not(equals('Public', parameters('accessMode')))]",
+    "loadBalancerBackendAddressPoolsValue": [
+      {
+        "id": "[resourceId('Microsoft.Network/loadBalancers/backendAddressPools', 'oakproxy-lb', 'oakproxy-lb-bap')]"
+      }
+    ],
+    "applicationGatewayBackendAddressPools": [
+      {
+        "id": "[resourceId('Microsoft.Network/applicationGateways/backendAddressPools', 'oakproxy-agw', 'oakproxy-agw-bap')]"
+      }
+    ]
   },
   "resources": [
     {
@@ -129,7 +205,8 @@
       "name": "oakproxy-vmss",
       "location": "[resourceGroup().location]",
       "dependsOn": [
-        "oakproxy-lb"
+        "oakproxy-lb",
+        "oakproxy-agw"
       ],
       "sku": {
         "name": "[parameters('vmSize')]",
@@ -169,11 +246,8 @@
                         "subnet": {
                           "id": "[resourceId(parameters('virtualNetworkResourceGroup'), 'Microsoft.Network/virtualNetworks/subnets', parameters('virtualNetworkName'), parameters('virtualNetworkSubnetName'))]"
                         },
-                        "loadBalancerBackendAddressPools": [
-                          {
-                            "id": "[resourceId('Microsoft.Network/loadBalancers/backendAddressPools', 'oakproxy-lb', 'oakproxy-lb-bap')]"
-                          }
-                        ]
+                        "loadBalancerBackendAddressPools": "[if(variables('privateAccessMode'),variables('loadBalancerBackendAddressPoolsValue'),json('null'))]",
+                        "applicationGatewayBackendAddressPools": "[if(variables('publicAccessMode'),variables('applicationGatewayBackendAddressPools'),json('null'))]"
                       }
                     }
                   ]
@@ -192,14 +266,17 @@
                   "autoUpgradeMinorVersion": true,
                   "settings": {
                     "configuration": {
-                      "url": "[uri(parameters('_artifactsLocation'), 'oakproxyconfiguration.ps1.zip')]",
+                      "url": "[uri(parameters('_artifactsLocation'), concat('refarch.djvm.', parameters('vmConfigurationVersion'), '/oakproxyconfiguration.ps1.zip'))]",
                       "script": "oakproxyconfiguration.ps1",
                       "function": "OakproxyConfiguration"
                     },
                     "configurationArguments": {
                       "DomainName": "[parameters('domainName')]",
                       "DomainOrganizationalUnit": "[parameters('domainOrganizationalUnit')]",
-                      "DomainGroupName": "[parameters('oakproxyServerGroupName')]"
+                      "DomainGroupName": "[parameters('oakproxyServerGroupName')]",
+                      "GmsaName": "[parameters('oakproxyGmsaName')]",
+                      "OakproxyPackageUrl": "[uri(parameters('_artifactsLocation'), concat(parameters('oakproxyVersion'), '/oakproxy-windows.zip'))]",
+                      "OakproxyConfigurationUrl": "[parameters('oakproxyConfigurationUrl')]"
                     }
                   },
                   "protectedSettings": {
@@ -207,7 +284,8 @@
                       "DomainJoinCredential": {
                         "userName": "[parameters('domainJoinUsername')]",
                         "Password": "[parameters('domainJoinPassword')]"
-                      }
+                      },
+                      "ArtifactsSasToken": "[parameters('_artifactsLocationSasToken')]"
                     },
                     "configurationUrlSasToken": "[parameters('_artifactsLocationSasToken')]"
                   }
@@ -220,6 +298,7 @@
       }
     },
     {
+      "condition": "[variables('privateAccessMode')]",
       "type": "Microsoft.Network/loadBalancers",
       "name": "oakproxy-lb",
       "location": "[resourceGroup().location]",
@@ -253,8 +332,8 @@
                 "id": "[resourceId('Microsoft.Network/loadBalancers/backendAddressPools', 'oakproxy-lb', 'oakproxy-lb-bap')]"
               },
               "protocol": "Tcp",
-              "frontendPort": 80,
-              "backendPort": 80,
+              "frontendPort": 443,
+              "backendPort": 443,
               "idleTimeoutInMinutes": 5,
               "probe": {
                 "id": "[resourceId('Microsoft.Network/loadBalancers/probes', 'oakproxy-lb', 'oakproxy-lb-probe')]"
@@ -275,6 +354,163 @@
           }
         ]
       }
+    },
+    {
+      "condition": "[variables('publicAccessMode')]",
+      "apiVersion": "2018-08-01",
+      "type": "Microsoft.Network/publicIPAddresses",
+      "name": "oakproxy-agw-pip",
+      "location": "[resourceGroup().location]",
+      "sku": {
+        "name": "Standard"
+      },
+      "properties": {
+        "publicIPAllocationMethod": "Static",
+        "dnsSettings": {
+          "domainNameLabel": "[parameters('applicationGatewayDnsLabel')]"
+        }
+      }
+    },
+    {
+      "condition": "[variables('publicAccessMode')]",
+      "type": "Microsoft.Network/applicationGateways",
+      "apiVersion": "2019-04-01",
+      "name": "oakproxy-agw",
+      "dependsOn": [
+        "oakproxy-agw-pip"
+      ],
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "sku":  {
+          "name": "Standard_v2",
+          "tier": "Standard_v2",
+          "capacity": "[parameters('applicationGatewayCapacity')]"
+        },
+        "gatewayIPConfigurations": [
+          {
+            "name": "oakproxy-agw-ipc",
+            "properties": {
+              "subnet": {
+                "id": "[resourceId(parameters('virtualNetworkResourceGroup'), 'Microsoft.Network/virtualNetworks/subnets', parameters('virtualNetworkName'), parameters('applicationGatewaySubnetName'))]"
+              }
+            }
+          }
+        ],
+        "sslCertificates": [
+          {
+            "name": "oakproxy-agw-cert",
+            "properties": {
+              "data": "[parameters('applicationGatewaySslCertData')]",
+              "password": "[parameters('applicationGatewaySslCertPassword')]"
+            }
+          }
+        ],
+        "frontendIPConfigurations": [
+          {
+            "name": "oakproxy-agw-feip",
+            "properties": {
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses', 'oakproxy-agw-pip')]"
+              }
+            }
+          }
+        ],
+        "frontendPorts": [
+          {
+            "name": "oakproxy-agw-port",
+            "properties": {
+              "port": 443
+            }
+          }
+        ],
+        "backendAddressPools": [
+          {
+            "name": "oakproxy-agw-bap"
+          }
+        ],
+        "backendHttpSettingsCollection": [
+          {
+            "name": "oakproxy-agw-hsc",
+            "properties": {
+              "port": 80,
+              "protocol": "Http",
+              "cookieBasedAffinity": "Disabled",
+              "pickHostNameFromBackendAddress": true,
+              "requestTimeout": 30,
+              "probe": {
+                "id": "[resourceId('Microsoft.Network/applicationGateways/probes', 'oakproxy-agw', 'oakproxy-agw-probe')]"
+              }
+            }
+          }
+        ],
+        "httpListeners": [
+          {
+            "name": "oakproxy-agw-listener",
+            "properties": {
+              "frontendIPConfiguration": {
+                "id": "[resourceId('Microsoft.Network/applicationGateways/frontendIPConfigurations', 'oakproxy-agw', 'oakproxy-agw-feip')]"
+              },
+              "frontendPort": {
+                "id": "[resourceId('Microsoft.Network/applicationGateways/frontendPorts', 'oakproxy-agw', 'oakproxy-agw-port')]"
+              },
+              "protocol": "Https",
+              "sslCertificate": {
+                "id": "[resourceId('Microsoft.Network/applicationGateways/sslCertificates', 'oakproxy-agw', 'oakproxy-agw-cert')]"
+              },
+              "requireServerNameIndication": false
+            }
+          }
+        ],
+        "urlPathMaps": [],
+        "requestRoutingRules": [
+          {
+            "name": "oakproxy-agw-rrr",
+            "properties": {
+              "ruleType": "Basic",
+              "httpListener": {
+                "id": "[resourceId('Microsoft.Network/applicationGateways/httpListeners', 'oakproxy-agw', 'oakproxy-agw-listener')]"
+              },
+              "backendAddressPool": {
+                "id": "[resourceId('Microsoft.Network/applicationGateways/backendAddressPools', 'oakproxy-agw', 'oakproxy-agw-bap')]"
+              },
+              "backendHttpSettings": {
+                "id": "[resourceId('Microsoft.Network/applicationGateways/backendHttpSettingsCollection', 'oakproxy-agw', 'oakproxy-agw-hsc')]"
+              }
+            }
+          }
+        ],
+        "probes": [
+          {
+            "name": "oakproxy-agw-probe",
+            "properties": {
+              "protocol": "Http",
+              "path": "/.oakproxy/health",
+              "interval": 30,
+              "timeout": 30,
+              "unhealthyThreshold": 3,
+              "pickHostNameFromBackendHttpSettings": true,
+              "minServers": 0,
+              "match": {
+                "statusCodes": [
+                  "200-399"
+                ]
+              }
+            }
+          }
+        ],
+        "enableHttp2": false
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "name": "[concat('oakproxy', uniqueString(resourceGroup().id), 'sa')]",
+      "location": "[resourceGroup().location]",
+      "apiVersion": "2018-07-01",
+      "sku": {
+        "name": "Standard_LRS"
+      },
+      "kind": "StorageV2",
+      "properties": {}
     }
   ],
   "outputs": {}
