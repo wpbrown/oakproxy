@@ -112,7 +112,7 @@
     },
     "oakproxyVersion": {
       "type": "string",
-      "defaultValue": "v0.1.3",
+      "defaultValue": "v0.3.0",
       "metadata": {
         "description": "."
       }
@@ -196,7 +196,8 @@
       {
         "id": "[resourceId('Microsoft.Network/applicationGateways/backendAddressPools', 'oakproxy-agw', 'oakproxy-agw-bap')]"
       }
-    ]
+    ],
+    "storageAccountName": "[concat('oakproxy', uniqueString(resourceGroup().id), 'sa')]"
   },
   "resources": [
     {
@@ -211,6 +212,9 @@
       "sku": {
         "name": "[parameters('vmSize')]",
         "capacity": "[parameters('instanceCount')]"
+      },
+      "identity": {
+        "type": "SystemAssigned"
       },
       "properties": {
         "overprovision": false,
@@ -381,7 +385,7 @@
       ],
       "location": "[resourceGroup().location]",
       "properties": {
-        "sku":  {
+        "sku": {
           "name": "Standard_v2",
           "tier": "Standard_v2",
           "capacity": "[parameters('applicationGatewayCapacity')]"
@@ -503,14 +507,37 @@
     },
     {
       "type": "Microsoft.Storage/storageAccounts",
-      "name": "[concat('oakproxy', uniqueString(resourceGroup().id), 'sa')]",
+      "name": "[variables('storageAccountName')]",
       "location": "[resourceGroup().location]",
-      "apiVersion": "2018-07-01",
+      "apiVersion": "2019-04-01",
       "sku": {
         "name": "Standard_LRS"
       },
       "kind": "StorageV2",
-      "properties": {}
+      "properties": {},
+      "resources": [
+        {
+            "name": "default/keys",
+            "type": "blobServices/containers",
+            "apiVersion": "2019-04-01",
+            "dependsOn": [
+                "[variables('storageAccountName')]"
+            ]
+        }
+    ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices/containers/providers/roleAssignments",
+      "name": "[concat(variables('storageAccountName'),'/default/keys/Microsoft.Authorization/',guid(resourceGroup().id, 'assign-vmss-sa'))]",
+      "apiVersion": "2018-07-01",
+      "properties": {
+        "principalId": "[reference('oakproxy-vmss', '2018-06-01', 'Full').identity.principalId]",
+        "roleDefinitionId": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Authorization/roleDefinitions/', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')]"
+      },
+      "dependsOn": [
+        "oakproxy-vmss",
+        "[variables('storageAccountName')]"
+      ]
     }
   ],
   "outputs": {}
