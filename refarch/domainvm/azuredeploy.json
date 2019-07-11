@@ -207,7 +207,8 @@
       "location": "[resourceGroup().location]",
       "dependsOn": [
         "oakproxy-lb",
-        "oakproxy-agw"
+        "oakproxy-agw",
+        "[variables('storageAccountName')]"
       ],
       "sku": {
         "name": "[parameters('vmSize')]",
@@ -280,7 +281,8 @@
                       "DomainGroupName": "[parameters('oakproxyServerGroupName')]",
                       "GmsaName": "[parameters('oakproxyGmsaName')]",
                       "OakproxyPackageUrl": "[uri(parameters('_artifactsLocation'), concat(parameters('oakproxyVersion'), '/oakproxy-windows.zip'))]",
-                      "OakproxyConfigurationUrl": "[parameters('oakproxyConfigurationUrl')]"
+                      "OakproxyConfigurationUrl": "[parameters('oakproxyConfigurationUrl')]",
+                      "KeyBlobContainerUrl": "[uri(reference(variables('storageAccountName')).primaryEndpoints.blob, 'keys')]"
                     }
                   },
                   "protectedSettings": {
@@ -532,7 +534,7 @@
       "apiVersion": "2018-07-01",
       "properties": {
         "principalId": "[reference('oakproxy-vmss', '2018-06-01', 'Full').identity.principalId]",
-        "roleDefinitionId": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Authorization/roleDefinitions/', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')]"
+        "roleDefinitionId": "[concat(subscription().id, '/providers/Microsoft.Authorization/roleDefinitions/', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')]"
       },
       "dependsOn": [
         "oakproxy-vmss",

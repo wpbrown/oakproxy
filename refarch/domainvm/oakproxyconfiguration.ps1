@@ -23,6 +23,9 @@ Configuration OakproxyConfiguration
         [Parameter(Mandatory)]
         [string]$OakproxyConfigurationUrl,
 
+        [Parameter(Mandatory)]
+        [string]$KeyBlobContainerUrl,
+
         [Parameter()]
         [string]$ArtifactsSasToken
     )
@@ -157,6 +160,19 @@ Configuration OakproxyConfiguration
             DependsOn = '[Script]EnableTls12'
         }
 
+        # Configure Key Management to use Blob Storage and DPAPING
+        File KeyStoreConfig {
+            DestinationPath = 'C:\ProgramData\oakproxy\config\Server__KeyManagement__StoreToBlobContainer'
+            Contents = "$KeyBlobContainerUrl/keydata.blob"
+            Force = $true
+        }
+
+        File KeyEncryptionConfig {
+            DestinationPath = 'C:\ProgramData\oakproxy\config\Server__KeyManagement__ProtectWithDpapiNg__UseSelfRule'
+            Contents = 'true'
+            Force = $true
+        }
+
         # Configure the OAKProxy service
         xService OAKProxy {
             Name = 'oakproxy'
@@ -167,7 +183,8 @@ Configuration OakproxyConfiguration
             GroupManagedServiceAccount = "$DomainName\$GmsaName$"
             StartupType = 'Automatic'
             State = 'Running'
-            DependsOn = '[Archive]UnpackTestApp', '[Script]LogSource', '[Script]VerifyGmsa', '[xRemoteFile]DownloadConfiguration'
+            DependsOn = '[Archive]UnpackTestApp', '[Script]LogSource', '[Script]VerifyGmsa', '[xRemoteFile]DownloadConfiguration',
+                '[File]KeyStoreConfig', '[File]KeyEncryptionConfig'
         }
 
         # Open Ports for the Service
