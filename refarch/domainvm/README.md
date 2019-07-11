@@ -2,15 +2,15 @@
 
 This reference architecture is ideal for enterprises that need to proxy one or more Windows Integrated Authentication applications. This reference architecture is a 100% infrastructure as code model. The servers do not require any backup because the entire resource group can be destroyed and recreated at will with this reference architecture.
 
-
+The default deployment is highly available inside a data center. It makes use of 3 fault domains with LRS storage and 3 VMs. By enabling the availability zones option the entire deployment can be zone redundant across 3 data centers in a region.
 
 ## Networking Options
 
 The reference architecture can be deployed for internal corporate network access only (internal mode), presented to the internet with an Azure Application Gateway (external mode), or both.
 
-Internal mode will deploy an internal network load balancer and expose an HTTP endpoint on a private IP in the corporate network. 
+Internal mode will deploy an internal network load balancer and expose an HTTPS endpoint on a private IP in the corporate network. OAKProxy must be configured to listen on an HTTPS endpoint.
 
-External mode will deploy an Azure Application Gateway and expose an HTTPS endpoint on a public IP on the internet. 
+External mode will deploy an Azure Application Gateway and expose an HTTPS endpoint on a public IP on the internet. OAKProxy should be configured to listen on an HTTP endpoint.
 
 # Prerequisites
 
@@ -102,12 +102,75 @@ TODO
 
 On going operations and maintenance of the service should follow a DevOps process. The original deployment process above can be rerun in a pipeline to deploy updates to the service.
 
-## Constrained Delegation ACL
+## External Dependencies
 
 The maintenance of the AD DS objects will likely be integrated with an existing DevOps/IaC process for configuration of AD DS. In large organizations, this process may be owned by a completely different team than the one maintaining OAKProxy infrastructure.
+
+### Computer Objects
+
+Either the AD DS team or the team responsible for OAKProxy must add a process to their existing automation systems that purges old computer objects from the AD DS directory. The VM scale set will add new objects over time, especially if auto-scaling is enabled. As configured above the `xsoakproxymanage` account would have the privilege needed to delete the computer objects, so an OAKProxy team could automate this, however those responsible for AD DS will likely have more stake excess objects in AD DS so they may want to take responsibility for this process.
+
+```powershell
+$InformationPreference = 'Continue'
+$oakproxyOU = 'OU=OAKProxy Servers,OU=Privileged Servers,DC=corp,DC=contoso,DC=com'
+Connect-AzAccount -Identity # Assumes running in Azure with a managed identity
+
+$hostnames = (Get-AzVmssVM -ResourceGroupName "oakproxy-rg" -VMScaleSetName "oakproxy-vmss").OsProfile.ComputerName
+Get-ADComputer -Filter * -SearchBase $oakproxyOU |
+    Where-Object { $_.Name -notin $hostnames } | 
+    ForEach-Object { Write-Information -MessageData "Deleting $($_.Name)."; $_ } | 
+    Remove-ADObject -Recursive -Confirm:$false
+```
+
+### Constrained Delegation ACL
 
 They should add code or a declaration in their source repository for the assignment of SPNs that can be updated in a deployment pipeline. PowerShell DSC example:
 
 ```powershell
-# TODO
+# Shared DSC Resources:
+Configuration ConstrainedDelegationAnyProtocolTo
+{
+    param
+    (
+        [Parameter(Mandatory)]
+        [string]$Source,
+
+        [Parameter(Mandatory)]
+        [string[]]$TargetSpns
+    )
+
+    Script EnableProxyDelegation {
+        SetScript = {
+            $principal = Get-ADObject -Filter {SAMAccountName -eq $using:Source}
+            $principal | Set-ADAccountControl -TrustedToAuthForDelegation $true
+            $principal | Set-ADObject -Add @{'msDS-AllowedToDelegateTo' = [string[]]$using:TargetSpns}
+        }
+        TestScript = {
+            $TRUSTED_TO_AUTH_FOR_DELEGATION = 0x1000000
+            $principal = Get-ADObject -Filter {SAMAccountName -eq $using:Source} -Properties 'msDS-AllowedToDelegateTo','userAccountControl'
+            return ($null -ne $principal['msDS-AllowedToDelegateTo'].Value -and $null -eq (Compare-Object $principal['msDS-AllowedToDelegateTo'].Value $using:TargetSpns)) -and ($principal['userAccountControl'].Value -band $TRUSTED_TO_AUTH_FOR_DELEGATION)
+        }
+        GetScript = {
+            $principal = Get-ADObject -Filter {SAMAccountName -eq $using:Source} -Properties 'msDS-AllowedToDelegateTo','userAccountControl','samAccountName'
+            return @{
+                Result = $principal | ConvertTo-Json
+            }
+        }
+    }
+}
+
+# Snippet from the AD DS Domain desired state configuration:
+$allProdTargetSpns = @('http/billingapp', 'http/billingapp.contoso.com', 'http/widgets.corp.contoso.com')
+
+xADManagedServiceAccount OakproxyGmsaExists {
+    ServiceAccountName = 'oakproxygmsa'
+    AccountType = 'Group'
+    Members = @('azoakservers')
+}
+
+ConstrainedDelegationAnyProtocolTo OakproxyGmsaKcdEnabled {
+    Source = 'oakproxygmsa$'
+    TargetSpns = $allProdTargetSpns
+    DependsOn = '[xADManagedServiceAccount]OakproxyGmsaExists'
+}
 ```

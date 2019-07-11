@@ -96,8 +96,7 @@
       "defaultValue": "Public",
       "allowedValues": [
         "Public",
-        "Private",
-        "Both"
+        "Private"
       ],
       "metadata": {
         "description": "."
@@ -109,6 +108,10 @@
       "metadata": {
         "description": "Address space for the lab network."
       }
+    },
+    "availabilityZones": {
+      "type": "array",
+      "defaultValue": []
     },
     "oakproxyVersion": {
       "type": "string",
@@ -147,7 +150,7 @@
     },
     "applicationGatewayCapacity": {
       "type": "int",
-      "defaultValue": 1
+      "defaultValue": 3
     },
     "applicationGatewaySubnetName": {
       "type": "string",
@@ -217,6 +220,7 @@
       "identity": {
         "type": "SystemAssigned"
       },
+      "zones": "[if(empty(parameters('availabilityZones')),json('null'), parameters('availabilityZones'))]",
       "properties": {
         "overprovision": false,
         "upgradePolicy": {
@@ -310,6 +314,9 @@
       "location": "[resourceGroup().location]",
       "apiVersion": "2019-04-01",
       "dependsOn": [],
+      "sku": {
+        "name": "Standard"
+      },
       "properties": {
         "frontendIPConfigurations": [
           {
@@ -386,6 +393,7 @@
         "oakproxy-agw-pip"
       ],
       "location": "[resourceGroup().location]",
+      "zones": "[if(empty(parameters('availabilityZones')),json('null'), parameters('availabilityZones'))]",
       "properties": {
         "sku": {
           "name": "Standard_v2",
@@ -513,24 +521,24 @@
       "location": "[resourceGroup().location]",
       "apiVersion": "2019-04-01",
       "sku": {
-        "name": "Standard_LRS"
+        "name": "[if(empty(parameters('availabilityZones')),'Standard_LRS', 'Standard_ZRS')]"
       },
       "kind": "StorageV2",
       "properties": {},
       "resources": [
         {
-            "name": "default/keys",
-            "type": "blobServices/containers",
-            "apiVersion": "2019-04-01",
-            "dependsOn": [
-                "[variables('storageAccountName')]"
-            ]
+          "name": "default/keys",
+          "type": "blobServices/containers",
+          "apiVersion": "2019-04-01",
+          "dependsOn": [
+            "[variables('storageAccountName')]"
+          ]
         }
-    ]
+      ]
     },
     {
       "type": "Microsoft.Storage/storageAccounts/blobServices/containers/providers/roleAssignments",
-      "name": "[concat(variables('storageAccountName'),'/default/keys/Microsoft.Authorization/',guid(resourceGroup().id, 'assign-vmss-sa'))]",
+      "name": "[concat(variables('storageAccountName'),'/default/keys/Microsoft.Authorization/',guid(resourceGroup().id, 'assignrole-vmss-sa'))]",
       "apiVersion": "2018-07-01",
       "properties": {
         "principalId": "[reference('oakproxy-vmss', '2018-06-01', 'Full').identity.principalId]",
