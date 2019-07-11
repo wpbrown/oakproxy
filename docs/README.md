@@ -423,7 +423,7 @@ If this object is not provided, [default key management](https://docs.microsoft.
 Name | Default | Description
 --- | --- | ---
 StoreToFilePath | *optional* | A full directory path where keys should be stored (this can be a local path or a UNC share path).
-StoreToBlobContainer | *optional* | A full URI with SAS token to an Azure Blob to store the encrypted keys. Managed identity for authentication to storage is [not yet supported](https://github.com/wpbrown/oakproxy/issues/45).
+StoreToBlobContainer | *optional* | A full URI with SAS token to an Azure Blob to store the encrypted keys. If no SAS token is provided, the Manage Identity of the Azure resource the application is running on will be used. If a Managed Identity is not enabled, an error will be thrown.
 ProtectWithKeyVaultKey | *optional* | The name of a Key Vault key used to encrypt the session keys. `KeyVault` must be configured on `Server` to use this option.
 ProtectWithCertificate  | *optional* |  A single certificate object used to encrypt the session keys.
 UnprotectWithCertificates | *optional* | An array of one or more certificate objects, which can be used to decrypt existing session keys. This is used to support key rotation.
