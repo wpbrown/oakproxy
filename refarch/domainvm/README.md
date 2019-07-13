@@ -8,7 +8,7 @@ The default deployment is highly available inside a data center. It makes use of
 
 The reference architecture can be deployed for internal corporate network access only (internal mode), presented to the internet with an Azure Application Gateway (external mode), or both.
 
-Internal mode will deploy an internal network load balancer and expose an HTTPS endpoint on a private IP in the corporate network. OAKProxy must be configured to listen on an HTTPS endpoint.
+Internal mode will deploy an internal network load balancer and expose an HTTPS endpoint on a private IP in the corporate network. OAKProxy must be configured to listen on an HTTPS endpoint in addition to HTTP.
 
 External mode will deploy an Azure Application Gateway and expose an HTTPS endpoint on a public IP on the internet. OAKProxy should be configured to listen on an HTTP endpoint.
 

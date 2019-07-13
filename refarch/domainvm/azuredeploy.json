@@ -192,7 +192,10 @@
     "privateAccessMode": "[not(equals('Public', parameters('accessMode')))]",
     "loadBalancerBackendAddressPoolsValue": [
       {
-        "id": "[resourceId('Microsoft.Network/loadBalancers/backendAddressPools', 'oakproxy-lb', 'oakproxy-lb-bap')]"
+        "id": "[resourceId('Microsoft.Network/loadBalancers/backendAddressPools', 'oakproxy-ilb', 'oakproxy-ilb-bap')]"
+      },
+      {
+        "id": "[resourceId('Microsoft.Network/loadBalancers/backendAddressPools', 'oakproxy-elb', 'oakproxy-elb-bap')]"
       }
     ],
     "applicationGatewayBackendAddressPools": [
@@ -209,7 +212,8 @@
       "name": "oakproxy-vmss",
       "location": "[resourceGroup().location]",
       "dependsOn": [
-        "oakproxy-lb",
+        "oakproxy-ilb",
+        "oakproxy-elb",
         "oakproxy-agw",
         "[variables('storageAccountName')]"
       ],
@@ -309,18 +313,81 @@
     },
     {
       "condition": "[variables('privateAccessMode')]",
+      "apiVersion": "2018-08-01",
+      "type": "Microsoft.Network/publicIPAddresses",
+      "name": "oakproxy-elb-pip",
+      "location": "[resourceGroup().location]",
+      "comments": "A Standard External Load Balancer or VM Public IPs are required for VMs connected to a Standard Internal Load-Balancers to have outbound access to the internet: https://docs.microsoft.com/en-us/azure/load-balancer/load-balancer-outbound-rules-overview#outbound-nat-for-internal-standard-load-balancer-scenarios",
+      "sku": {
+        "name": "Standard"
+      },
+      "properties": {
+        "publicIPAllocationMethod": "Static"
+      }
+    },
+    {
+      "condition": "[variables('privateAccessMode')]",
       "type": "Microsoft.Network/loadBalancers",
-      "name": "oakproxy-lb",
+      "name": "oakproxy-elb",
       "location": "[resourceGroup().location]",
       "apiVersion": "2019-04-01",
-      "dependsOn": [],
+      "comments": "See comments on 'oakproxy-elb-pip'.",
+      "dependsOn": [
+        "oakproxy-elb-pip"
+      ],
       "sku": {
         "name": "Standard"
       },
       "properties": {
         "frontendIPConfigurations": [
           {
-            "name": "oakproxy-lb-fipc",
+            "name": "oakproxy-elb-fipc",
+            "properties": {
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses', 'oakproxy-elb-pip')]"
+              }
+            }
+          }
+        ],
+        "backendAddressPools": [
+          {
+            "name": "oakproxy-elb-bap"
+          }
+        ],
+        "outboundRules": [
+          {
+            "name": "oakproxy-elb-or",
+            "properties": {
+              "frontendIPConfigurations": [
+                {
+                  "id": "[resourceId('Microsoft.Network/loadBalancers/frontendIPConfigurations', 'oakproxy-elb', 'oakproxy-elb-fipc')]"
+                }
+              ],
+              "allocatedOutboundPorts": 4096,
+              "idleTimeoutInMinutes": 4,
+              "enableTcpReset": true,
+              "protocol": "All",
+              "backendAddressPool": {
+                "id": "[resourceId('Microsoft.Network/loadBalancers/backendAddressPools', 'oakproxy-elb', 'oakproxy-elb-bap')]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "condition": "[variables('privateAccessMode')]",
+      "type": "Microsoft.Network/loadBalancers",
+      "name": "oakproxy-ilb",
+      "location": "[resourceGroup().location]",
+      "apiVersion": "2019-04-01",
+      "sku": {
+        "name": "Standard"
+      },
+      "properties": {
+        "frontendIPConfigurations": [
+          {
+            "name": "oakproxy-ilb-fipc",
             "properties": {
               "privateIPAllocationMethod": "Dynamic",
               "subnet": {
@@ -331,32 +398,32 @@
         ],
         "backendAddressPools": [
           {
-            "name": "oakproxy-lb-bap"
+            "name": "oakproxy-ilb-bap"
           }
         ],
         "loadBalancingRules": [
           {
-            "name": "roundRobinLBRule",
+            "name": "oakproxy-ilb-lbr",
             "properties": {
               "frontendIPConfiguration": {
-                "id": "[resourceId('Microsoft.Network/loadBalancers/frontendIPConfigurations', 'oakproxy-lb', 'oakproxy-lb-fipc')]"
+                "id": "[resourceId('Microsoft.Network/loadBalancers/frontendIPConfigurations', 'oakproxy-ilb', 'oakproxy-ilb-fipc')]"
               },
               "backendAddressPool": {
-                "id": "[resourceId('Microsoft.Network/loadBalancers/backendAddressPools', 'oakproxy-lb', 'oakproxy-lb-bap')]"
+                "id": "[resourceId('Microsoft.Network/loadBalancers/backendAddressPools', 'oakproxy-ilb', 'oakproxy-ilb-bap')]"
               },
               "protocol": "Tcp",
               "frontendPort": 443,
               "backendPort": 443,
               "idleTimeoutInMinutes": 5,
               "probe": {
-                "id": "[resourceId('Microsoft.Network/loadBalancers/probes', 'oakproxy-lb', 'oakproxy-lb-probe')]"
+                "id": "[resourceId('Microsoft.Network/loadBalancers/probes', 'oakproxy-ilb', 'oakproxy-ilb-probe')]"
               }
             }
           }
         ],
         "probes": [
           {
-            "name": "oakproxy-lb-probe",
+            "name": "oakproxy-ilb-probe",
             "properties": {
               "protocol": "Http",
               "port": 80,

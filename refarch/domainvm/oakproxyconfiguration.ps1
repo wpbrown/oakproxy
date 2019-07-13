@@ -1,3 +1,5 @@
+$VerbosePreference = 'Continue'
+
 Configuration OakproxyConfiguration
 {
     param
@@ -18,16 +20,22 @@ Configuration OakproxyConfiguration
         [string]$DomainGroupName,
 
         [Parameter(Mandatory)]
+        [string]$KeyBlobContainerUrl,
+        
+        [Parameter(Mandatory)]
         [string]$OakproxyPackageUrl,
 
         [Parameter(Mandatory)]
         [string]$OakproxyConfigurationUrl,
 
-        [Parameter(Mandatory)]
-        [string]$KeyBlobContainerUrl,
+        [Parameter()]
+        [string]$ArtifactsSasToken,
 
         [Parameter()]
-        [string]$ArtifactsSasToken
+        [string]$HttpsCertificateData,
+
+        [Parameter()]
+        [PSCredential]$HttpsCertificateCredential
     )
 
     Import-DscResource -ModuleName xActiveDirectory
@@ -200,5 +208,67 @@ Configuration OakproxyConfiguration
             Protocol = 'TCP'
             DependsOn = '[Archive]UnpackTestApp'
         }
+
+        if ($HttpsCertificateData) {
+            # Install the certificate during compilation of the configuration. See [Note1] at the bottom.
+            $data = [Convert]::FromBase64String($HttpsCertificateData)
+            $cert = [Security.Cryptography.X509Certificates.X509Certificate2]::new($data, $HttpsCertificateCredential.Password, 'EphemeralKeySet')
+            $certThumbprint = $cert.Thumbprint
+            $storeCert = Get-ChildItem -Path "Cert:\LocalMachine\My\$($cert.Thumbprint)" -ErrorAction Ignore
+            if ($null -eq $storeCert) {
+                Write-Verbose "Certificate '$certThumbprint' not found. Installing..."
+                $cert = [Security.Cryptography.X509Certificates.X509Certificate2]::new($data, $HttpsCertificateCredential.Password, 'MachineKeySet, PersistKeySet')
+                $certStore = [System.Security.Cryptography.X509Certificates.X509Store]::new('My', 'LocalMachine')
+                $certStore.Open('ReadWrite')
+                $certStore.Add($cert)
+                $certStore.Close()
+            } else {
+                Write-Verbose "Certificate '$certThumbprint' was found."
+            }
+            
+            # Update the certificate ACL
+            Script ImportCertificate {
+                GetScript = {
+                    $cert = Get-ChildItem -Path "Cert:\LocalMachine\My\$($using:certThumbprint)" -ErrorAction Ignore
+                    $access = $cert.PrivateKey.CspKeyContainerInfo.CryptoKeySecurity.Access.IdentityReference.Value | Where-Object { $_.EndsWith("\$using:GmsaName$") }
+                    return @{
+                        Result = if ($access) { $access } else { 'Missing' }
+                    }
+                }
+                TestScript = {
+                    $state = [scriptblock]::Create($GetScript).Invoke()
+                    return ($state[0]['Result'] -ne 'Missing')
+                }
+                SetScript = {
+                    $cert = Get-ChildItem -Path "Cert:\LocalMachine\My\$($using:certThumbprint)" -ErrorAction Ignore
+                    $containerInfo = $cert.PrivateKey.CspKeyContainerInfo
+                    $csp = [Security.Cryptography.CspParameters]::new($containerInfo.ProviderType, $containerInfo.ProviderName, $containerInfo.KeyContainerName)
+                    $csp.Flags = 'UseExistingKey', 'UseMachineKeyStore'
+                    $csp.CryptoKeySecurity = $containerInfo.CryptoKeySecurity
+                    $csp.KeyNumber = $containerInfo.KeyNumber
+                    $rule = [Security.AccessControl.CryptoKeyAccessRule]::new("$using:GmsaName$", 'GenericRead', 'Allow')
+                    $csp.CryptoKeySecurity.AddAccessRule($rule)
+                    $rsa = [Security.Cryptography.RSACryptoServiceProvider]::new($csp)
+                    $rsa.Dispose()
+                }
+                DependsOn = '[Computer]JoinComputer'
+            }
+        }
     }
 }
+
+# [Note1]
+# If we use CertificateDSC to install the cert, it will use Import-PfxCertificate, which will use CNG to store the private key. 
+# There are no .NET APIs for this and thus we can't change the private key ACL through .NET or Powershell once it's installed.
+# There is a clunky way to retrieve the key container name with PInvokes and then we update the ACL via the file system, but doing
+# all this inside a Script resource is just too much. See the how below:
+#  https://www.sysadmins.lv/blog-en/retrieve-cng-key-container-name-and-unique-name.aspx
+#  https://stackoverflow.com/questions/17185429/how-to-grant-permission-to-private-key-from-powershell/22146915
+#  
+# We can't install the script with a script resource securly because SecureStrings can't be passed in to Script Resource script
+# blocks. Ultimately I decide since the future of DSC will continue investing in compilation on the target node*, it's not that 
+# bad to cheat and install the cert at compilation time. This means DSC regular evaluations will not restore the cert if it is 
+# removed. We still do update the ACL with a DSC Resource because it depends on being domain joined and looking up the gMSA's 
+# SID.
+#
+# * https://devblogs.microsoft.com/powershell/azure-policy-guest-configuration-client/
