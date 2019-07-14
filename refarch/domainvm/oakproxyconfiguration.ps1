@@ -181,20 +181,6 @@ Configuration OakproxyConfiguration
             Force = $true
         }
 
-        # Configure the OAKProxy service
-        xService OAKProxy {
-            Name = 'oakproxy'
-            Ensure = 'Present'
-            Path = "$installationRoot\$packageVersion\oakproxy.exe -service"
-            DisplayName = 'OAKProxy'
-            Description = 'OAKProxy authenticating reverse-proxy.'
-            GroupManagedServiceAccount = "$DomainName\$GmsaName$"
-            StartupType = 'Automatic'
-            State = 'Running'
-            DependsOn = '[Archive]UnpackTestApp', '[Script]LogSource', '[Script]VerifyGmsa', '[xRemoteFile]DownloadConfiguration',
-                '[File]KeyStoreConfig', '[File]KeyEncryptionConfig'
-        }
-
         # Open Ports for the Service
         Firewall OpenPorts
         {
@@ -208,6 +194,9 @@ Configuration OakproxyConfiguration
             Protocol = 'TCP'
             DependsOn = '[Archive]UnpackTestApp'
         }
+
+        $oakproxyServiceDependencies = @('[Archive]UnpackTestApp', '[Script]LogSource', '[Script]VerifyGmsa', '[xRemoteFile]DownloadConfiguration',
+            '[File]KeyStoreConfig', '[File]KeyEncryptionConfig')
 
         if ($HttpsCertificateData) {
             # Install the certificate during compilation of the configuration. See [Note1] at the bottom.
@@ -225,9 +214,11 @@ Configuration OakproxyConfiguration
             } else {
                 Write-Verbose "Certificate '$certThumbprint' was found."
             }
+
+            $oakproxyServiceDependencies += '[Script]UpdateCertificateKeyAcl'
             
             # Update the certificate ACL
-            Script ImportCertificate {
+            Script UpdateCertificateKeyAcl {
                 GetScript = {
                     $cert = Get-ChildItem -Path "Cert:\LocalMachine\My\$($using:certThumbprint)" -ErrorAction Ignore
                     $access = $cert.PrivateKey.CspKeyContainerInfo.CryptoKeySecurity.Access.IdentityReference.Value | Where-Object { $_.EndsWith("\$using:GmsaName$") }
@@ -253,6 +244,21 @@ Configuration OakproxyConfiguration
                 }
                 DependsOn = '[Computer]JoinComputer'
             }
+        } else {
+            Write-Verbose 'No certificate data provided.'
+        }
+
+        # Configure the OAKProxy service
+        xService OAKProxy {
+            Name = 'oakproxy'
+            Ensure = 'Present'
+            Path = "$installationRoot\$packageVersion\oakproxy.exe -service"
+            DisplayName = 'OAKProxy'
+            Description = 'OAKProxy authenticating reverse-proxy.'
+            GroupManagedServiceAccount = "$DomainName\$GmsaName$"
+            StartupType = 'Automatic'
+            State = 'Running'
+            DependsOn = $oakproxyServiceDependencies
         }
     }
 }

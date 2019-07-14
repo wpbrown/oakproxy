@@ -91,6 +91,16 @@ $serviceAccount = New-ADServiceAccount -Name $accountName `
 $serviceAccount | Set-ADAccountControl -TrustedToAuthForDelegation $true
 ```
 
+## HTTPS Certificate
+
+In both public or private access modes, you must provide a certificate for HTTPS. Modern authentication requires an HTTPS reply URL regardless of whether the application is internal to your network or not. 
+
+In public mode, the certificate _must_ be specified in the `httpsCertificateData` template argument. This certificate will be installed in to the Application Gateway.
+
+In private mode, the certificate _may_ be specified in the template. If the certificate is specified, it will be installed on the VMs and the gMSA account will granted access to use it. If you do not specify a certificate you should configure AD Certificate Services and a certificate autoenrollment GPO for the OAKProxy OU.
+
+In either mode, the certificate is not required to be publicly trusted. You can use your internal certificate authority. Only the devices accessing the OAKProxy service actually need to trust the certificate.
+
 # Deployment
 
 TODO

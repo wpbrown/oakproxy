@@ -159,14 +159,14 @@
         "description": "Address space for the lab network."
       }
     },
-    "applicationGatewaySslCertData": {
+    "httpsCertificateData": {
       "type": "string",
       "defaultValue": "",
       "metadata": {
         "description": "Address space for the lab network."
       }
     },
-    "applicationGatewaySslCertPassword": {
+    "httpsCertificatePassword": {
       "type": "securestring",
       "defaultValue": "",
       "metadata": {
@@ -299,6 +299,11 @@
                         "userName": "[parameters('domainJoinUsername')]",
                         "Password": "[parameters('domainJoinPassword')]"
                       },
+                      "HttpsCertificateData": "[if(variables('privateAccessMode'),parameters('httpsCertificateData'),'')]",
+                      "HttpsCertificateCredential": {
+                        "userName": "not_used",
+                        "Password": "[if(and(variables('privateAccessMode'),not(empty(parameters('httpsCertificatePassword')))),parameters('httpsCertificatePassword'),'not_used')]"
+                      },                      
                       "ArtifactsSasToken": "[parameters('_artifactsLocationSasToken')]"
                     },
                     "configurationUrlSasToken": "[parameters('_artifactsLocationSasToken')]"
@@ -481,8 +486,8 @@
           {
             "name": "oakproxy-agw-cert",
             "properties": {
-              "data": "[parameters('applicationGatewaySslCertData')]",
-              "password": "[parameters('applicationGatewaySslCertPassword')]"
+              "data": "[parameters('httpsCertificateData')]",
+              "password": "[parameters('httpsCertificatePassword')]"
             }
           }
         ],
