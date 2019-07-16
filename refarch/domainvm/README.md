@@ -16,15 +16,17 @@ If you need redundancy across multiple Azure regions, deploy this template to mu
 
 ## Networking Options
 
-The reference architecture can be deployed for internal corporate network access only (internal mode), presented to the internet with an Azure Application Gateway (external mode), or both.
+The reference architecture can be deployed for internal corporate network access only (private mode), presented to the internet with an Azure Application Gateway (public mode).
 
-External mode will deploy an Azure Application Gateway and expose an HTTPS endpoint on a public IP on the internet. OAKProxy should be configured to listen on an HTTP endpoint.
+Public mode will deploy an Azure Application Gateway and expose an HTTPS endpoint on a public IP on the internet. OAKProxy should be configured to listen on an HTTP endpoint.
 
-Internal mode will deploy an internal network load balancer and expose an HTTPS endpoint on a private IP in the corporate network. OAKProxy must be configured to listen on an HTTPS endpoint in addition to HTTP.
+Private mode will deploy an internal network load balancer and expose an HTTPS endpoint on a private IP in the corporate network. OAKProxy must be configured to listen on an HTTPS endpoint in addition to HTTP. This mode can also be used if you need to build your own "public mode" using your own NVAs instead of Azure Application Gateway.
 
 ![img](../../docs/images/refarchdomvmpriv.svg)
 
-Internal mode uses 2 Standard Load Balancers. This is due to a requirement of _Standard_ Internal Load Balancers: a separate External Load Balancer is required for egress traffic to the internet. Egress traffic to the internet is only to facilitate access to Azure AD metadata endpoints and Azure blob storage. All direct outbound internet access can be removed using service endpoints and NVAs and then the External Load Balancer is not required. This is beyond the scope of this reference architecture.
+Internal mode uses 2 Standard Load Balancers. This is due to a requirement of _Standard_ Internal Load Balancers: a separate External Load Balancer is required for egress traffic to the internet. There is _no inbound rules configured_ on the External Load Balancer so no ingress connections from the public internet are possible through the public IP.
+
+Egress traffic to the internet is only to facilitate access to Azure AD metadata endpoints and Azure blob storage. All direct outbound internet access can be removed using service endpoints, proxies, and NVAs and then the External Load Balancer is not required. This is beyond the scope of this reference architecture.
 
 # Prerequisites
 
@@ -39,6 +41,10 @@ Most large enterprises will already have processes in place to provide these pre
 * A list of the SPNs for the Kerberos applications that OAKProxy will provide authentication services.
 * A certificate trusted by your clients or publicly for all of the hostnames this deployment will handle. 
 * A DNS zone where CNAME records for each proxied application can be created.
+* An OAKProxy configuration file.
+* An Azure Blob Storage container to store deployment artifacts.
+* An OpenID Connect identity provider (Azure AD is recommended).
+* (Recommended) An Azure Key Vault containing deployment secrets.
 
 To simplify management and adding new applications, a wildcard certificate is recommended.
 
@@ -114,20 +120,131 @@ In private mode, the certificate _may_ be specified in the template. If the cert
 
 In either mode, the certificate is not required to be publicly trusted. You can use your internal certificate authority. Only the devices accessing the OAKProxy service need to trust the certificate. If devices that you do not configure with your CA root certificate access the service, you will need a publicly trusted certificate.
 
+## OAKProxy Configuration
+
+OAKProxy configuration is extensively documented with examples in the [OAKProxy documentation](https://github.com/wpbrown/oakproxy/blob/master/docs/README.md).
+
+For this reference architecture _do not_ specify the `Server.KeyManagement` section in your configuration file. This is automatically configured on the VMs to use Azure Blob storage and DPAPI NG with access scoped to the gMSA account.
+
+A minimal template for a public mode deployment follows:
+```yaml
+Server:
+  Urls: 'http://*'
+  UseForwardedHeaders: true
+  EnableHealthChecks: true
+
+IdentityProviders:
+- # Your Identity Provider
+
+Authenticators:
+- # Your authenticators. For this reference architecture, at least 
+  # one Kerberos authenticator would be expected.
+
+Applications:
+- # Your applications.
+
+Configuration:
+  ForwardedHeaders:
+    ForwardedHostHeaderName: X-Original-Host
+```
+
+A minimal template for a private mode deployment follows. Applications and authentication will be served via HTTPS. The HTTP endpoint is retained to support the Load Balancer health probe. Standard Load Balancers support HTTPS health probes, but this architecture always uses HTTP in case a non-publicly trusted certificate is used. When using the 'Default'/single certificate configuration below, the certificate must have Subject Alternative Names for all the hostnames of the configured applications.
+
+```yaml
+Server:
+  Urls: 'http://*;https://*'
+  UseForwardedHeaders: true
+  EnableHealthChecks: true
+
+IdentityProviders:
+- # Your Identity Provider
+
+Authenticators:
+- # Your authenticators. For this reference architecture, at least 
+  # one Kerberos authenticator would be expected.
+
+Applications:
+- # Your applications.
+
+Configuration:
+  Kestrel:
+    Certificates:
+      Default:
+        Subject: 'oakproxy.corp.contoso.com'
+        Store: My
+        Location: LocalMachine
+```
+
+## Artifact Storage
+
+It's possible to deploy straight from GitHub without configuring the `_artifactsLocation` parameter, but this is not useful for any scenario other than a quick test. A secure storage account that is only writable by privileged accounts or a DevOps pipeline is recommended. 
+
+This reference architecture follows a convention that lays out deployment artifacts exactly like GitHub releases. The convention is `<release-version>\oakproxy-windows.zip` for the service binaries and `refarch.djvm.<release-version>\oakproxyconfiguration.ps1.zip` for the VM DSC configuration. The release-versions are exactly as there appear in the [GitHub releases](https://github.com/wpbrown/oakproxy/releases). There is no convention for the OAKProxy configuration file, but it should be placed somewhere under `_artifactsLocation` as it will be requested with the `_artifactsLocationSasToken` if one is provided.
+
+Example:
+```bash
+will@Azure:~$ az storage blob list --account-name contosodeploy --container oakproxy --query '[].name'
+[
+  "oakproxy-public-demo.yml",
+  "oakproxy-private-demo.yml",
+  "refarch.djvm.v1.0.0/oakproxyconfiguration.ps1.zip",
+  "v0.3.0/oakproxy-windows.zip"
+]
+```
+
 # Deployment
 
-TODO
+Once all the prerequisites are in place deployment is straightforward.
 
-1. Populate the `parameter.json`.
-2. Deploy the `azuredeploy.json`.
+1. Populate the `azuredeploy.parameters.json`.
+
+   Walk through the parameters and fill them in for your deployment.
+
+   Name | Description
+   --- | ---
+   **adminUsername** | Username for the built-in Administrator of the VMs.
+   **adminPassword** | Password for the built-in Administrator of the VMs.
+   **domainJoinUsername** | Username for the account that has rights to join the VMs.
+   **domainJoinPassword** | Password for the account that has rights to join the VMs.
+   **domainName** | Fully qualified name of the AD DS domain to join the VMs.
+   **domainOrganizationalUnit** | Distinguished name of the AD DS OU to join the VMs.
+   **oakproxyServerGroupName** | Name of the AD DS security group to add the VMs.
+   **oakproxyGmsaName** | Name of the AD DS gMSA that will run the OAKProxy service.
+   instanceCount | Number of VMs in the cluster. (Default: 3)
+   virtualNetworkResourceGroup | Name of the resource group that contains the virtual network to join the VMs. (Default: The deployment resource group)
+   **virtualNetworkName** | Name of the virtual network to join the VMs.
+   **virtualNetworkSubnetName** | Name of the subnet to join the VMs.
+   domainHostNamePrefix | Prefix of the computer names in the VM scale set. (Default: `azoakserv`)
+   hybridUseLicense | Use hybrid Windows licensing on the VMs. (Default: true)
+   accessMode | Deploy for `Private` access on the intranet or `Public` access on the internet. (Default: `Public`)
+   vmSize | The size to use for the VMs. (Default: Standard_D2s_v3)
+   availabilityZones | Provide multiple zone numbers to create a zone redundant deployment. Set to `["1","2","3"]` to use all zones. (Default: [])
+   **oakproxyVersion** | The version of OAKProxy to retrieve from the _artifactsLocations. Example: `v0.3.0`. (Default provided for testing only. Specify a value.)
+   **vmConfigurationVersion** | The version of the VM configuration to retrieve from the _artifactsLocations. Example: `v1.0.0`. (Default provided for testing only. Specify a value.)
+   **_artifactsLocation** | The base URI where artifacts required by this template are located including a trailing '/' (Default provided for testing only. Specify a value.)
+   **_artifactsLocationSasToken** | The sasToken required to access _artifactsLocation.
+   oakproxyConfigurationUrl | The full URL of the configuration file for OAKProxy. This is typically under the `_artifactsLocation`. The `_artifactsLocationSasToken` will be used if provided. (Default: `<_artifactsLocation>/oakproxy.yml`)
+   applicationGatewayCapacity | The application gateway v2 capacity. (Default: 3)
+   applicationGatewayDnsLabel | The DNS label for the application gateway public IP. (Required for `Public` access mode.)
+   applicationGatewaySubnetName | Name of the subnet to install the application gateway. (Required for `Public` access mode.)
+   httpsCertificateData | The HTTPS certificate for all of the hostnames using the proxy service. Provide a base64 encoded PFX file. (Required for `Public` access mode. Recommended for `Private` access mode.)
+   httpsCertificatePassword | The password for the PFX file. (Required if `httpsCertificateData` is provided.)
+
+2. Deploy the `azuredeploy.json` to an empty existing resource group. Note that mode `complete` will delete any resources in the resource group that are not specified in the template.
+   
+   ```bash
+   will@surface:~/oakproxy-deploy$ az group deployment create -g oakproxy-rg --template-file azuredeploy.json --parameters @azuredeploy.parameters.json --verbose --mode complete
+   ```
+   
+3. Take note of the template output. For public deployments, update the public CNAME records for your proxied application hostnames to point to the Azure Application Gateways FQDN. For private deployments, update the A records for your proxied application hostnames to point to the internal load balancer IP address.
 
 # DevOps Integration
 
-On going operations and maintenance of the service should follow a DevOps process. The original deployment process above can be rerun in a pipeline to deploy updates to the service.
+Ongoing operations and maintenance of the service should follow a DevOps process. Assuming secrets have been stored in Key Vault, the 2 JSON documents above can be checked in to source control along with your OAKProxy configuration file. The original deployment process above can be rerun in a DevOps pipeline to ensure the entire service including the VM configuration is in the desired state. 
 
 ## External Dependencies
 
-The maintenance of the AD DS objects will likely be integrated with an existing DevOps/IaC process for configuration of AD DS. In large organizations, this process may be owned by a completely different team than the one maintaining OAKProxy infrastructure.
+The maintenance of the AD DS objects will likely be integrated with an existing DevOps/Infrastructure-as-Code process for configuration of AD DS. In large organizations, this process may be owned by a completely different team than the one maintaining OAKProxy infrastructure.
 
 ### Computer Objects
 
@@ -147,9 +264,9 @@ Get-ADComputer -Filter * -SearchBase $oakproxyOU |
 
 ### Constrained Delegation ACL
 
-The AD DS team should add code or a declaration in their source repository for the assignment of SPNs that can be updated in a deployment pipeline. 
+The AD DS team should add code or a declaration in their source repository for maintaining the list of SPNs that delegate authentication to OAKProxy. This way the list can be updated using Infrastructure-as-Code in a deployment pipeline. 
 
-Below is a PowerShell DSC example:
+Below is a PowerShell DSC example. This is just an example. Whatever DSC tool or imperative scripts you use are valid options.
 
 ```powershell
 # Shared DSC Resources:
