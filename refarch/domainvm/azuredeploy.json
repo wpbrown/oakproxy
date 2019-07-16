@@ -5,43 +5,43 @@
     "adminPassword": {
       "type": "securestring",
       "metadata": {
-        "description": "Password for the machine built-in Administrator."
+        "description": "Password for the built-in Administrator of the VMs."
       }
     },
     "adminUsername": {
       "type": "string",
       "metadata": {
-        "description": "Username for the machine built-in Administrator."
+        "description": "Username for the built-in Administrator of the VMs."
       }
     },
     "domainName": {
       "type": "string",
       "metadata": {
-        "description": "Name of the AD DS domain to join the VMs."
+        "description": "Fully qualified name of the AD DS domain to join the VMs."
       }
     },
     "domainOrganizationalUnit": {
       "type": "string",
       "metadata": {
-        "description": "Name of the AD DS OU to join the VMs."
+        "description": "Distinguished name of the AD DS OU to join the VMs."
       }
     },
     "oakproxyServerGroupName": {
       "type": "string",
       "metadata": {
-        "description": "Name of the AD DS OU to join the VMs."
+        "description": "Name of the AD DS security group to add the VMs."
       }
     },
     "oakproxyGmsaName": {
       "type": "string",
       "metadata": {
-        "description": "Name of the AD DS OU to join the VMs."
+        "description": "Name of the AD DS gMSA that will run the OAKProxy service."
       }
     },
     "instanceCount": {
       "type": "int",
       "metadata": {
-        "description": "Number of VM instances (10 or less)."
+        "description": "Number of VMs in the cluster."
       },
       "defaultValue": 3,
       "maxValue": 10
@@ -49,46 +49,47 @@
     "domainJoinPassword": {
       "type": "securestring",
       "metadata": {
-        "description": "Password for the user that has rights to join the VMs."
+        "description": "Password for the account that has rights to join the VMs."
       }
     },
     "domainJoinUsername": {
       "type": "string",
       "metadata": {
-        "description": "Username for the user that has rights to join the VMs."
+        "description": "Username for the account that has rights to join the VMs."
       }
     },
     "virtualNetworkResourceGroup": {
       "type": "string",
       "defaultValue": "[resourceGroup()]",
       "metadata": {
-        "description": "Address space for the lab network."
+        "description": "Name of the resource group that contains the virtual network to join the VMs."
       }
     },
     "virtualNetworkName": {
       "type": "string",
       "metadata": {
-        "description": "Address space for the lab network."
+        "description": "Name of the virtual network to join the VMs."
       }
     },
     "virtualNetworkSubnetName": {
       "type": "string",
       "metadata": {
-        "description": "Address space for the lab network."
+        "description": "Name of the subnet to join the VMs."
       }
     },
     "domainHostNamePrefix": {
       "type": "string",
       "defaultValue": "azoakserv",
+      "maxLength": 9,
       "metadata": {
-        "description": "Address space for the lab network."
+        "description": "Prefix of the computer names in the VM scale set."
       }
     },
     "hybridUseLicense": {
       "type": "bool",
       "defaultValue": true,
       "metadata": {
-        "description": "Address space for the lab network."
+        "description": "Use hybrid Windows licensing on the VMs."
       }
     },
     "accessMode": {
@@ -99,32 +100,35 @@
         "Private"
       ],
       "metadata": {
-        "description": "."
+        "description": "Deploy for private access on the intranet or public access on the internet."
       }
     },
     "vmSize": {
       "type": "string",
       "defaultValue": "Standard_D2s_v3",
       "metadata": {
-        "description": "Address space for the lab network."
+        "description": "The size to use for the VMs."
       }
     },
     "availabilityZones": {
       "type": "array",
-      "defaultValue": []
+      "defaultValue": [],
+      "metadata": {
+        "description": "Provide multiple zone numbers to create a zone redundant deployment."
+      }
     },
     "oakproxyVersion": {
       "type": "string",
       "defaultValue": "v0.3.0",
       "metadata": {
-        "description": "."
+        "description": "The version of OAKProxy to retreive from the _artifactsLocations."
       }
     },
     "vmConfigurationVersion": {
       "type": "string",
       "defaultValue": "v1.0.0",
       "metadata": {
-        "description": "."
+        "description": "The version of the VM configuration to retreive from the _artifactsLocations."
       }
     },
     "_artifactsLocation": {
@@ -145,39 +149,42 @@
       "type": "string",
       "defaultValue": "[uri(parameters('_artifactsLocation'), 'oakproxy.yml')]",
       "metadata": {
-        "description": "."
+        "description": "The full URL of the configuration file for OAKProxy. This is typically under the _artifactsLocation. The _artifactsLocationSasToken will be used if provided."
       }
     },
     "applicationGatewayCapacity": {
       "type": "int",
-      "defaultValue": 3
+      "defaultValue": 3,
+      "metadata": {
+        "description": "The application gateway v2 capacity."
+      }
     },
     "applicationGatewaySubnetName": {
       "type": "string",
       "defaultValue": "",
       "metadata": {
-        "description": "Address space for the lab network."
+        "description": "Name of the subnet to install the application gateway."
       }
     },
     "httpsCertificateData": {
       "type": "string",
       "defaultValue": "",
       "metadata": {
-        "description": "Address space for the lab network."
+        "description": "The HTTPS certificate for all of the hostnames using the proxy service. Provide a base64 encoded PFX file."
       }
     },
     "httpsCertificatePassword": {
       "type": "securestring",
       "defaultValue": "",
       "metadata": {
-        "description": "Address space for the lab network."
+        "description": "The password for the PFX file."
       }
     },
     "applicationGatewayDnsLabel": {
       "type": "string",
       "defaultValue": "",
       "metadata": {
-        "description": "Address space for the lab network."
+        "description": "The DNS label for the application gateway public IP."
       }
     }
   },
@@ -303,7 +310,7 @@
                       "HttpsCertificateCredential": {
                         "userName": "not_used",
                         "Password": "[if(and(variables('privateAccessMode'),not(empty(parameters('httpsCertificatePassword')))),parameters('httpsCertificatePassword'),'not_used')]"
-                      },                      
+                      },
                       "ArtifactsSasToken": "[parameters('_artifactsLocationSasToken')]"
                     },
                     "configurationUrlSasToken": "[parameters('_artifactsLocationSasToken')]"
@@ -622,5 +629,21 @@
       ]
     }
   ],
-  "outputs": {}
+  "outputs": {
+    "applicationGatewayIpAddress": {
+      "type": "string",
+      "condition": "[variables('publicAccessMode')]",
+      "value": "[reference('oakproxy-agw-pip').ipAddress]"
+    },
+    "applicationGatewayDnsName": {
+      "type": "string",
+      "condition": "[variables('publicAccessMode')]",
+      "value": "[reference('oakproxy-agw-pip').dnsSettings.fqdn]"
+    },
+    "internalLoadBalancerIpAddress": {
+      "type": "string",
+      "condition": "[variables('privateAccessMode')]",
+      "value": "[reference('oakproxy-ilb').frontendIPConfigurations[0].properties.privateIPAddress]"
+    }
+  }
 }

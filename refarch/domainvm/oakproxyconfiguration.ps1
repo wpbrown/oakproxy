@@ -1,4 +1,4 @@
-$VerbosePreference = 'Continue'
+$InformationPreference = 'Continue'
 
 Configuration OakproxyConfiguration
 {
@@ -205,14 +205,14 @@ Configuration OakproxyConfiguration
             $certThumbprint = $cert.Thumbprint
             $storeCert = Get-ChildItem -Path "Cert:\LocalMachine\My\$($cert.Thumbprint)" -ErrorAction Ignore
             if ($null -eq $storeCert) {
-                Write-Verbose "Certificate '$certThumbprint' not found. Installing..."
+                Write-Information "Certificate '$certThumbprint' not found. Installing..."
                 $cert = [Security.Cryptography.X509Certificates.X509Certificate2]::new($data, $HttpsCertificateCredential.Password, 'MachineKeySet, PersistKeySet')
                 $certStore = [System.Security.Cryptography.X509Certificates.X509Store]::new('My', 'LocalMachine')
                 $certStore.Open('ReadWrite')
                 $certStore.Add($cert)
                 $certStore.Close()
             } else {
-                Write-Verbose "Certificate '$certThumbprint' was found."
+                Write-Information "Certificate '$certThumbprint' was found."
             }
 
             $oakproxyServiceDependencies += '[Script]UpdateCertificateKeyAcl'
@@ -245,7 +245,7 @@ Configuration OakproxyConfiguration
                 DependsOn = '[Computer]JoinComputer'
             }
         } else {
-            Write-Verbose 'No certificate data provided.'
+            Write-Information 'No certificate data provided.'
         }
 
         # Configure the OAKProxy service

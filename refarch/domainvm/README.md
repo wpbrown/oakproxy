@@ -1,37 +1,50 @@
 # Domain-joined VM Reference Architecture
 
-This reference architecture is ideal for enterprises that need to proxy one or more Windows Integrated Authentication applications. This reference architecture is a 100% infrastructure as code model. The servers do not require any backup because the entire resource group can be destroyed and recreated at will with this reference architecture.
+This reference architecture is ideal for enterprises that need to enable modern authentication for one or more Windows Integrated Authentication applications (WIA). This architecture also supports all other authentication methods supported by OAKProxy, but it may be overkill if you don't need the Kerberos (WIA) authentication option.
 
-The default deployment is highly available inside a data center. It makes use of 3 fault domains with LRS storage and 3 VMs. By enabling the availability zones option the entire deployment can be zone redundant across 3 data centers in a region.
+This reference architecture is a 100% infrastructure as code model. All of the VMs use ephemeral disks. As such, they do not require any backup. The entire resource group can be destroyed and recreated from the ARM template.
+
+![img](../../docs/images/refarchdomvm.svg)
+
+## High Availability
+
+The default deployment is highly available across 3 fault domains in a single data center. By enabling the `availabilityZones` option in the template the entire deployment can be zone redundant across 3 data centers in a region.
+
+If you need redundancy across multiple Azure regions, deploy this template to multiple regions. The regions can be run behind shared host names using Azure Traffic Manager.
+
+**Notice**: The artifact storage is a *runtime* dependency of the deployment. Whenever VMs are rebuilt or the scale set is scaled up, artifacts are pulled from the deployment blob storage. _If_ you use the `availabilityZones` option, your artifact storage account must also be a ZRS SKU for your deployment to be zone redundant. Key Vault is _not_ a runtime dependency. There are no sustained refences to Key Vault outside of deployment time.
 
 ## Networking Options
 
 The reference architecture can be deployed for internal corporate network access only (internal mode), presented to the internet with an Azure Application Gateway (external mode), or both.
 
+External mode will deploy an Azure Application Gateway and expose an HTTPS endpoint on a public IP on the internet. OAKProxy should be configured to listen on an HTTP endpoint.
+
 Internal mode will deploy an internal network load balancer and expose an HTTPS endpoint on a private IP in the corporate network. OAKProxy must be configured to listen on an HTTPS endpoint in addition to HTTP.
 
-External mode will deploy an Azure Application Gateway and expose an HTTPS endpoint on a public IP on the internet. OAKProxy should be configured to listen on an HTTP endpoint.
+![img](../../docs/images/refarchdomvmpriv.svg)
+
+Internal mode uses 2 Standard Load Balancers. This is due to a requirement of _Standard_ Internal Load Balancers: a separate External Load Balancer is required for egress traffic to the internet. Egress traffic to the internet is only to facilitate access to Azure AD metadata endpoints and Azure blob storage. All direct outbound internet access can be removed using service endpoints and NVAs and then the External Load Balancer is not required. This is beyond the scope of this reference architecture.
 
 # Prerequisites
 
-* A VNet on the corporate network routing domain (i.e. a "VDC spoke" or a VNet with a VPN or ExpressRoute gateway).
+Most large enterprises will already have processes in place to provide these prerequisites. In case you have no pre-existing process or need more detail, some example administrative commands are provided in this section.
+
+* A VNet on the corporate network routing domain (i.e. a "[VDC spoke](https://docs.microsoft.com/en-us/azure/architecture/vdc/)" or a VNet with a VPN or ExpressRoute gateway).
 * An AD DS OU to place the server computer objects.
 * An AD DS security group to contain the server computer objects.
 * An AD DS account that can join VMs in the OU and update the group.
 * An AD DS domain with a [KDS Root Key](https://docs.microsoft.com/en-us/windows-server/security/group-managed-service-accounts/create-the-key-distribution-services-kds-root-key) (to support the use of a gMSA).
 * A gMSA account that will run the OAKProxy service on the domain VMs.
-* A list of the SPNs for the Kerberos applications that OAKProxy will front.
-
-## External Mode
-
-* A publicly trusted certificate for all of the hostnames this deployment will handle. 
+* A list of the SPNs for the Kerberos applications that OAKProxy will provide authentication services.
+* A certificate trusted by your clients or publicly for all of the hostnames this deployment will handle. 
 * A DNS zone where CNAME records for each proxied application can be created.
 
 To simplify management and adding new applications, a wildcard certificate is recommended.
 
 ## Create the AD DS structure
 
-First create the OU and security group. Ideally the OU has minimal Group Policy linked, but at least has policy to enforce highly restricted access to these VMs. Customize as appropriate for your domain managment policies.
+First create the OU and security group. Ideally the OU has minimal Group Policy linked, but at least has policy to enforce highly restricted access to these VMs. Customize as appropriate for your domain management policies.
 
 ```powershell
 $OUName = 'OAKProxy Servers'
@@ -99,7 +112,7 @@ In public mode, the certificate _must_ be specified in the `httpsCertificateData
 
 In private mode, the certificate _may_ be specified in the template. If the certificate is specified, it will be installed on the VMs and the gMSA account will granted access to use it. If you do not specify a certificate you should configure AD Certificate Services and a certificate autoenrollment GPO for the OAKProxy OU.
 
-In either mode, the certificate is not required to be publicly trusted. You can use your internal certificate authority. Only the devices accessing the OAKProxy service actually need to trust the certificate.
+In either mode, the certificate is not required to be publicly trusted. You can use your internal certificate authority. Only the devices accessing the OAKProxy service need to trust the certificate. If devices that you do not configure with your CA root certificate access the service, you will need a publicly trusted certificate.
 
 # Deployment
 
@@ -134,7 +147,9 @@ Get-ADComputer -Filter * -SearchBase $oakproxyOU |
 
 ### Constrained Delegation ACL
 
-They should add code or a declaration in their source repository for the assignment of SPNs that can be updated in a deployment pipeline. PowerShell DSC example:
+The AD DS team should add code or a declaration in their source repository for the assignment of SPNs that can be updated in a deployment pipeline. 
+
+Below is a PowerShell DSC example:
 
 ```powershell
 # Shared DSC Resources:
