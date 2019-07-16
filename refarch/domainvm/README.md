@@ -2,9 +2,9 @@
 
 This reference architecture is ideal for enterprises that need to enable modern authentication for one or more Windows Integrated Authentication applications (WIA). This architecture also supports all other authentication methods supported by OAKProxy, but it may be overkill if you don't need the Kerberos (WIA) authentication option.
 
-This reference architecture is a 100% infrastructure as code model. All of the VMs use ephemeral disks. As such, they do not require any backup. The entire resource group can be destroyed and recreated from the ARM template.
-
 ![img](../../docs/images/refarchdomvm.svg)
+
+This reference architecture is a 100% infrastructure as code model. All of the VMs use ephemeral disks. As such, they do not require any backup. The entire resource group can be destroyed and recreated from the ARM template.
 
 ## High Availability
 
@@ -233,10 +233,36 @@ Once all the prerequisites are in place deployment is straightforward.
 2. Deploy the `azuredeploy.json` to an empty existing resource group. Note that mode `complete` will delete any resources in the resource group that are not specified in the template.
    
    ```bash
-   will@surface:~/oakproxy-deploy$ az group deployment create -g oakproxy-rg --template-file azuredeploy.json --parameters @azuredeploy.parameters.json --verbose --mode complete
+   will@Azure:~/oakproxy-deploy$ az group deployment create -g oakproxy-rg --template-file azuredeploy.json --parameters @azuredeploy.parameters.json --verbose --mode complete
    ```
    
-3. Take note of the template output. For public deployments, update the public CNAME records for your proxied application hostnames to point to the Azure Application Gateways FQDN. For private deployments, update the A records for your proxied application hostnames to point to the internal load balancer IP address.
+3. Take note of the template output. 
+   
+   ```json
+   "outputs": {
+     "applicationGatewayDnsName": {
+       "type": "String",
+       "value": "contosoakproxy.eastus2.cloudapp.azure.com"
+     },
+     "applicationGatewayIpAddress": {
+       "type": "String",
+       "value": "20.36.254.133"
+     }
+   },
+   ```
+
+   For public deployments, update the public CNAME records for your proxied application hostnames to point to the FQDN in the `applicationGatewayDnsName` value. 
+
+    ```json
+    "outputs": {
+      "internalLoadBalancerIpAddress": {
+        "type": "String",
+        "value": "10.3.2.9"
+      }
+    },
+    ```
+
+   For private deployments, update the private A records for your proxied application hostnames to point to the internal load balancer IP address in the `internalLoadBalancerIpAddress` value.
 
 # DevOps Integration
 

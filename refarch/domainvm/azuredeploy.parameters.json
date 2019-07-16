@@ -1,0 +1,89 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "adminUsername": {
+      "value": "localadmin"
+    },
+    "adminPassword": {
+      "reference": {
+        "keyVault": {
+          "id": "/subscriptions/<SUB_GUID>/resourcegroups/<RG_NAME>/providers/Microsoft.KeyVault/vaults/<KV_NAME>"
+        },
+        "secretName": "SECRET_NAME"
+      }
+    },
+    "domainJoinUsername": {
+      "value": "contoso\\xsoakproxymanage"
+    },
+    "domainJoinPassword": {
+      "reference": {
+        "keyVault": {
+          "id": "/subscriptions/<SUB_GUID>/resourcegroups/<RG_NAME>/providers/Microsoft.KeyVault/vaults/<KV_NAME>"
+        },
+        "secretName": "SECRET_NAME"
+      }
+    },
+    "domainName": {
+      "value": "corp.contoso.com"
+    },
+    "domainOrganizationalUnit": {
+      "value": "OU=OAKProxy Servers,OU=Privileged Servers,DC=corp,DC=contoso,DC=com"
+    },
+    "oakproxyServerGroupName": {
+      "value": "azoakservers"
+    },
+    "oakproxyGmsaName": {
+      "value": "oakproxygmsa"
+    },
+    "virtualNetworkResourceGroup": {
+      "value": "dmz-infra-rg"
+    },
+    "virtualNetworkName": {
+      "value": "dmz-vnet"
+    },
+    "virtualNetworkSubnetName": {
+      "value": "oakproxysubnet"
+    },
+    "accessMode": {
+      "value": "Public"
+    },
+    "oakproxyVersion": {
+      "value": "v0.3.0"
+    },
+    "vmConfigurationVersion": {
+      "value": "v1.0.0"
+    },
+    "_artifactsLocation": {
+      "value": "https://contosodeploy.blob.core.windows.net/oakproxy/"
+    },
+    "_artifactsLocationSasToken": {
+      "reference": {
+        "keyVault": {
+          "id": "/subscriptions/<SUB_GUID>/resourcegroups/<RG_NAME>/providers/Microsoft.KeyVault/vaults/<KV_NAME>"
+        },
+        "secretName": "SECRET_NAME"
+      }
+    },
+    "oakproxyConfigurationUrl": {
+      "value": "https://contosodeploy.blob.core.windows.net/oakproxy/oakproxy.yml"
+    },
+    "applicationGatewayDnsLabel": {
+      "value": "contosoakproxy"
+    },
+    "applicationGatewaySubnetName": {
+      "value": "oakproxygatewaysubnet"
+    },
+    "httpsCertificateData": {
+      "value": "BASE64_PFX_DATA"
+    },
+    "httpsCertificatePassword": {
+      "reference": {
+        "keyVault": {
+          "id": "/subscriptions/<SUB_GUID>/resourcegroups/<RG_NAME>/providers/Microsoft.KeyVault/vaults/<KV_NAME>"
+        },
+        "secretName": "SECRET_NAME"
+      }
+    }
+  }
+}
