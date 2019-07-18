@@ -12,7 +12,9 @@ The default deployment is highly available across 3 fault domains in a single da
 
 If you need redundancy across multiple Azure regions, deploy this template to multiple regions. The regions can be run behind shared host names using Azure Traffic Manager.
 
-**Notice**: The artifact storage is a *runtime* dependency of the deployment. Whenever VMs are rebuilt or the scale set is scaled up, artifacts are pulled from the deployment blob storage. _If_ you use the `availabilityZones` option, your artifact storage account must also be a ZRS SKU for your deployment to be zone redundant. Key Vault is _not_ a runtime dependency. There are no sustained refences to Key Vault outside of deployment time.
+**Notice**: The artifact storage is a *runtime* dependency of the deployment. Whenever VMs are rebuilt or the scale set is scaled up, artifacts are pulled from the deployment blob storage. _If_ you use the `availabilityZones` option, your artifact storage account must also be a ZRS SKU for your deployment to be zone redundant. Key Vault is _not_ a runtime dependency. 
+
+There are no sustained refences to Key Vault outside of deployment time by default. However, you may choose to reference the Key Vault in your OAKProxy configuration file to store application client secrets for example. In this case there is a dependency at startup time of the service (e.g. when a VM is built). Key Vault is always geo-redundant. 
 
 ## Networking Options
 

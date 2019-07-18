@@ -644,6 +644,10 @@
       "type": "string",
       "condition": "[variables('privateAccessMode')]",
       "value": "[reference('oakproxy-ilb').frontendIPConfigurations[0].properties.privateIPAddress]"
+    },
+    "virtualMachineIdentityObjectId": {
+      "type": "string",
+      "value": "[reference('oakproxy-vmss', '2018-06-01', 'Full').identity.principalId]"
     }
   }
 }
