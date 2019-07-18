@@ -187,6 +187,8 @@ namespace OAKProxy
                 }
             }
 
+            services.AddHttpContextAccessor();
+
             ConfigureAuthentication(services);
             ConfigureAuthorization(services);
             ConfigureProxy(services);
