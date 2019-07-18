@@ -102,6 +102,7 @@ $groupName = 'azoakservers'
 $accountName = 'oakproxygmsa'
 $accountHostname = "${accountName}.corp.contoso.com"
 $proxiedServiceSpns = @('http/billingapp','http/billingapp.corp.contoso.com', 'http/widgetsales.corp.contoso.com')
+
 $group = Get-ADGroup -Identity $groupName
 $serviceAccount = New-ADServiceAccount -Name $accountName `
     -PrincipalsAllowedToRetrieveManagedPassword $group `
