@@ -41,7 +41,7 @@ namespace OAKProxy.Proxy
 
             // We must disable connection pooling when using Kerberos, due to a bug in corefx.
             // This is a temporary workaround until a better solution is implemeneted.
-            // ...GitHub Issue Pending...
+            // https://github.com/dotnet/corefx/issues/39621
             handler.MaxConnectionsPerServer = int.MaxValue;
             handler.PooledConnectionLifetime = TimeSpan.Zero;
         }
