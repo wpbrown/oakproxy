@@ -6,6 +6,8 @@ This reference architecture is ideal for enterprises that need to enable modern 
 
 This reference architecture is a 100% infrastructure as code model. All of the VMs use ephemeral disks. As such, they do not require any backup. The entire resource group can be destroyed and recreated from the ARM template.
 
+See the [video walkthrough](https://youtu.be/0hJiGTIcB74) on YouTube.
+
 ## High Availability
 
 The default deployment is highly available across 3 fault domains in a single data center. By enabling the `availabilityZones` option in the template the entire deployment can be zone redundant across 3 data centers in a region.
