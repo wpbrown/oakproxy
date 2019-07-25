@@ -5,230 +5,45 @@ using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Policy;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.DataProtection;
-using Microsoft.AspNetCore.HostFiltering;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.HttpOverrides;
-using Microsoft.Azure.KeyVault;
-using Microsoft.Azure.Services.AppAuthentication;
-using Microsoft.Azure.Storage.Auth;
-using Microsoft.Azure.Storage.Blob;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using OAKProxy.PolicyEvaluator;
-using OAKProxy.Proxy;
-using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IdentityModel.Tokens.Jwt;
-using System.IO;
 using System.Linq;
-using System.Net.Http;
 using System.Text.RegularExpressions;
-using System.Threading;
-using System.Threading.Tasks;
 
-namespace OAKProxy
+namespace OAKProxy.Proxy
 {
-    public class Startup
+    public class ProxyServiceBuilder
     {
-        private readonly IConfiguration _configuration;
-        private readonly ApplicationOptions _options;
-        private readonly ILogger<Startup> _logger;
+        private readonly ProxyOptions _proxyOptions;
 
-        public Startup(IConfiguration configuration, IOptions<ApplicationOptions> options, ILogger<Startup> logger)
+        public ProxyServiceBuilder(ProxyOptions proxyOptions)
         {
-            _configuration = configuration;
-            _logger = logger;
-
-            try
-            {
-                _options = options.Value;
-            }
-            catch (OptionsValidationException e)
-            {
-                foreach (var failure in e.Failures)
-                {
-                    logger.LogCritical(failure);
-                }
-            }
+            _proxyOptions = proxyOptions;
         }
 
-        public void ConfigureServices(IServiceCollection services)
-        {
-            if (_options is null)
-            {
-                return;
-            }
-
-            // Header Forwarding
-            if (_options.Server.UseForwardedHeaders)
-            {
-                services.Configure<ForwardedHeadersOptions>(options =>
-                {
-                    options.ForwardedHeaders = ForwardedHeaders.All;
-                    options.KnownNetworks.Clear();
-                    options.KnownProxies.Clear();
-                    _configuration.GetSection("Configuration:ForwardedHeaders").Bind(options);
-                });
-            }
-
-            // Application Insights
-            if (!String.IsNullOrWhiteSpace(_options.Server.ApplicationInsightsKey))
-            {
-                services.AddApplicationInsightsTelemetry(options =>
-                {
-                    options.InstrumentationKey = _options.Server.ApplicationInsightsKey;
-                    _configuration.GetSection("Configuration:ApplicationInsights").Bind(options);
-                });
-                services.AddApplicationInsightsTelemetryProcessor<TelemetryProcessor>();
-            }
-
-            // Key Management
-            if (_options.Server.KeyManagement != null)
-            {
-                var dataProtectionBuilder = services.AddDataProtection();
-                var kmOptions = _options.Server.KeyManagement;
-
-                kmOptions.LoadCertificates(_configuration.GetSection("Server:KeyManagement"));
-
-                if (!String.IsNullOrEmpty(kmOptions.StoreToFilePath))
-                {
-                    var directoryInfo = new DirectoryInfo(kmOptions.StoreToFilePath);
-                    if (!directoryInfo.Exists)
-                    {
-                        throw new DirectoryNotFoundException("The specified key storage directory does not exist.");
-                    }
-                    dataProtectionBuilder.PersistKeysToFileSystem(directoryInfo);
-                }
-                else if (!String.IsNullOrEmpty(kmOptions.StoreToBlobContainer))
-                {
-                    var blobUri = new Uri(kmOptions.StoreToBlobContainer);
-                    if (String.IsNullOrEmpty(blobUri.Query))
-                    {
-                        var azureServiceTokenProvider = new AzureServiceTokenProvider();
-                        var tokenAndFrequency = StorageTokenRenewerAsync(azureServiceTokenProvider, CancellationToken.None)
-                            .GetAwaiter().GetResult();
-
-                        TokenCredential tokenCredential = new TokenCredential(tokenAndFrequency.Token,
-                                                                              StorageTokenRenewerAsync,
-                                                                              azureServiceTokenProvider,
-                                                                              tokenAndFrequency.Frequency.Value);
-
-                        var storageCredentials = new StorageCredentials(tokenCredential);
-                        var cloudBlockBlob = new CloudBlockBlob(blobUri, storageCredentials);
-                        dataProtectionBuilder.PersistKeysToAzureBlobStorage(cloudBlockBlob);
-                    }
-                    else
-                    {
-                        dataProtectionBuilder.PersistKeysToAzureBlobStorage(blobUri);
-                    }
-                }
-
-                if (!String.IsNullOrEmpty(kmOptions.ProtectWithKeyVaultKey))
-                {
-                    var keyVaultSection = _configuration?.GetSection("Server:KeyVault");
-                    var kvOptions = new KeyVaultOptions(keyVaultSection);
-
-                    var keyIdBuilder = new UriBuilder(kvOptions.VaultUri)
-                    {
-                        Path = $"/keys/${kmOptions.ProtectWithKeyVaultKey}"
-                    };
-                    var keyId = keyIdBuilder.Uri.ToString();
-
-                    // TODO: Unify configuration and key management key vault clients
-                    if (kvOptions.ClientId == null)
-                    {
-                        // Use Managed Identity
-                        var azureServiceTokenProvider = new AzureServiceTokenProvider();
-                        var authenticationCallback = new KeyVaultClient.AuthenticationCallback(azureServiceTokenProvider.KeyVaultTokenCallback);
-                        dataProtectionBuilder.ProtectKeysWithAzureKeyVault(new KeyVaultClient(authenticationCallback), keyId);
-                    }
-                    else
-                    {
-                        if (kvOptions.ClientSecret != null)
-                        {
-                            dataProtectionBuilder.ProtectKeysWithAzureKeyVault(keyId, kvOptions.ClientId, kvOptions.ClientSecret);
-                        }
-                        else if (kvOptions.Certificate != null)
-                        {
-                            dataProtectionBuilder.ProtectKeysWithAzureKeyVault(keyId, kvOptions.ClientId, kvOptions.Certificate);
-                        }
-                    }
-                }
-                else if (kmOptions.ProtectWithCertificate != null)
-                {
-                    dataProtectionBuilder.ProtectKeysWithCertificate(kmOptions.ProtectWithCertificate);
-
-                    if (kmOptions.UnprotectWithCertificates != null)
-                    {
-                        dataProtectionBuilder.UnprotectKeysWithAnyCertificate(kmOptions.UnprotectWithCertificates);
-                    }
-                }
-                else if (kmOptions.ProtectWithDpapiNg != null)
-                {
-                    if (kmOptions.ProtectWithDpapiNg.UseSelfRule)
-                    {
-                        dataProtectionBuilder.ProtectKeysWithDpapiNG();
-                    }
-                    else
-                    {
-                        dataProtectionBuilder.ProtectKeysWithDpapiNG(kmOptions.ProtectWithDpapiNg.DescriptorRule, kmOptions.ProtectWithDpapiNg.DescriptorFlags);
-                    }
-                }
-                else
-                {
-                    throw new Exception("Unvalidated options would have allowed for unprotected key storage.");
-                }
-            }
-
-            services.AddHttpContextAccessor();
-
-            ConfigureAuthentication(services);
-            ConfigureAuthorization(services);
-            ConfigureProxy(services);
-
-            services.AddHealthChecks();
-        }
-
-        private static async Task<NewTokenAndFrequency> StorageTokenRenewerAsync(object state, CancellationToken cancellationToken)
-        {
-            const string StorageResource = "https://storage.azure.com/";
-
-            var authResult = await ((AzureServiceTokenProvider)state).GetAuthenticationResultAsync(StorageResource, null, cancellationToken);
-
-            TimeSpan next = (authResult.ExpiresOn - DateTimeOffset.UtcNow) - TimeSpan.FromMinutes(5);
-            if (next.Ticks < 0)
-            {
-                next = default;
-            }
-
-            return new NewTokenAndFrequency(authResult.AccessToken, next);
-        }
-
-        private void ConfigureAuthentication(IServiceCollection services)
+        public void ConfigureAuthentication(IServiceCollection services)
         {
             services.AddScoped<IAuthenticationHandlerProvider, FilteredAuthenticationHandlerProvider>();
 
             var authBuilder = services.AddAuthentication();
-            foreach (var application in _options.Applications)
+            foreach (var application in _proxyOptions.Applications)
             {
-                var idp = _options.IdentityProviders.Single(i => i.Name == application.IdentityProviderBinding.Name);
-                var additionalClaimsRetained = GetAllNeededClaims(application, _options);
-                if (additionalClaimsRetained != null)
-                {
-                    _logger.LogInformation("These claims will be automatically retained for application '{Application}': {Claims}.", application.Name, String.Join(", ", additionalClaimsRetained));
-                }
+                var idp = _proxyOptions.IdentityProviders.Single(i => i.Name == application.IdentityProviderBinding.Name);
+                var additionalClaimsRetained = GetAllNeededClaims(application, _proxyOptions);
+                //if (additionalClaimsRetained != null)
+                //{
+                //    _logger.LogInformation("These claims will be automatically retained for application '{Application}': {Claims}.", application.Name, String.Join(", ", additionalClaimsRetained));
+                //}
 
                 bool retainWebToken = false;
                 bool retainApiToken = false;
                 var bearerAuthenticators = application.AuthenticatorBindings?
-                    .Select(b => _options.Authenticators.Single(a => a.Name == b.Name))
+                    .Select(b => _proxyOptions.Authenticators.Single(a => a.Name == b.Name))
                     .Where(a => a.Type == AuthenticatorType.Bearer);
                 if (bearerAuthenticators?.Count() > 0)
                 {
@@ -250,7 +65,7 @@ namespace OAKProxy
         }
 
         private static readonly Regex claimRegex = new Regex(@"(?:^|\b)c\[""(.+?)""\]", RegexOptions.Compiled);
-        private string[] GetAllNeededClaims(ProxyApplication application, ApplicationOptions options)
+        private string[] GetAllNeededClaims(ProxyApplication application, ProxyOptions options)
         {
             var headerAuthenticators  = application.AuthenticatorBindings?
                 .Select(b => options.Authenticators.Single(a => a.Name == b.Name))
@@ -452,13 +267,13 @@ namespace OAKProxy
             }
         }
 
-        private void ConfigureAuthorization(IServiceCollection services)
+        public void ConfigureAuthorization(IServiceCollection services)
         {
             services.AddTransient<IPolicyEvaluator, StatusPolicyEvaluator>();
-            services.AddAuthorization(options => CreateAuthorizationPolicies(options, _options));
+            services.AddAuthorization(options => CreateAuthorizationPolicies(options, _proxyOptions));
         }
 
-        private static void CreateAuthorizationPolicies(AuthorizationOptions authOptions, ApplicationOptions options)
+        private static void CreateAuthorizationPolicies(AuthorizationOptions authOptions, ProxyOptions options)
         {
             foreach (var application in options.Applications)
             {
@@ -502,7 +317,7 @@ namespace OAKProxy
             }
         }
 
-        private void ConfigureProxy(IServiceCollection services)
+        public void ConfigureProxy(IServiceCollection services)
         {
             services.AddScoped<IProxyApplicationService, ProxyApplicationService>();
             services.AddSingleton<KerberosIdentityService>();
@@ -510,7 +325,7 @@ namespace OAKProxy
             services.AddSingleton<IClaimsProviderProvider, ClaimsProviderProvider>();
             services.AddMemoryCache();
 
-            foreach (var application in _options.Applications)
+            foreach (var application in _proxyOptions.Applications)
             {
                 services.AddHttpClient(application.Name).ConfigureHttpMessageHandlerBuilder(builder =>
                 {
@@ -527,37 +342,10 @@ namespace OAKProxy
                 });
             }
 
-            services.Configure<HostFilteringOptions>(options =>
+            services.AddHostFiltering(options =>
             {
-                options.AllowedHosts = _options.Applications.Select(x => x.Host.Value.Value).ToArray();
+                options.AllowedHosts = _proxyOptions.Applications.Select(x => x.Host.Value.Value).ToArray();
             });
-        }
-
-        public void Configure(IApplicationBuilder app)
-        {
-            var authenticatorWarmup = Task.Run(() => app.ApplicationServices.GetService<IAuthenticatorProvider>());
-
-            if (_options.Server.EnableHealthChecks)
-                app.UseHealthChecks(ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.Health));
-            app.UseStatusCodePages(Errors.StatusPageAsync);
-            app.UseExceptionHandler(new ExceptionHandlerOptions { ExceptionHandler = Errors.Handle });
-            if (_options.Server.UseForwardedHeaders)
-                app.UseForwardedHeaders();            
-            app.UseHostFiltering();
-            app.UseAuthentication();
-            app.Map(ProxyMetaEndpoints.PathBase, ConfigureMetaPath);
-            app.UsePolicyEvaluation();
-            app.RunProxy();
-
-            authenticatorWarmup.Wait();
-        }
-
-        private void ConfigureMetaPath(IApplicationBuilder app)
-        {
-            app.UseWhen(
-                context => context.Request.Path.StartsWithSegments(ProxyMetaEndpoints.AuthenticatedPathBase), 
-                a => a.UsePolicyEvaluation());
-            app.RunProxyMeta();
         }
     }
 }

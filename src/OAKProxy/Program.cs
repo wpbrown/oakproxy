@@ -1,16 +1,10 @@
-﻿using Microsoft.AspNetCore;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Hosting.WindowsServices;
+﻿using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.EventLog;
-using Microsoft.Extensions.Options;
-using OAKProxy.Logging;
-using OAKProxy.Proxy;
-using ProcessPrivileges;
+using OAKProxy.Hosting;
 using System;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -18,113 +12,99 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 
 namespace OAKProxy
 {
     public class Program
     {
-        public static void Main(string[] args)
+        static Program()
         {
             TypeDescriptor.AddAttributes(typeof(HostString), new TypeConverterAttribute(typeof(HostStringTypeConverter)));
+        }
+
+        public static async Task<int> Main(string[] arguments)
+        {
+            bool isWindows = IsWindows();
+            bool isService = isWindows && arguments.Contains("-service");
+
+            ILogger initLogger = GetEarlyInitializationLogger(useWindowsEventLog: isService);
+            if (initLogger == null)
+                return 1;
+
+            string bannerData = AssembleBannerData();
+            initLogger.LogInformation($"Initializing {bannerData}...");
+
+            IConfiguration unifiedConfiguration = BuildUnifiedConfiguration();
+            IHost host = OakproxyHostBuilder.Create(unifiedConfiguration, runAsWindowsService: isService, initLogger)?.Build();
+            if (host == null)
+                return 2;
+
+            var logger = host.Services.GetRequiredService<ILogger<Program>>();
+            logger.LogInformation($"Starting host for {bannerData}.");
+            await host.RunAsync();
+            logger.LogInformation($"Stopped host for {bannerData}.");
+
+            return 0;
+        }
+
+        private static ILogger GetEarlyInitializationLogger(bool useWindowsEventLog)
+        {
+            string eventLogSource = useWindowsEventLog && EventLog.SourceExists("OAKProxy") ? "OAKProxy" : null;
+
+            using var loggerFactory = LoggerFactory.Create(builder =>
+            {
+                if (useWindowsEventLog)
+                {
+                    builder.AddEventLog(configure => configure.SourceName = eventLogSource);
+                }
+                else
+                {
+                    builder.AddConsole();
+                }
+            });
+
+            var logger = loggerFactory.CreateLogger("Initialization");
+            if (useWindowsEventLog && eventLogSource == null)
+            {
+                logger.LogCritical("OAKProxy event log source is not registered. Aborting.");
+                return null;
+            }
+
+            return logger;
+        }
+
+        private static string AssembleBannerData()
+        {
             var assembly = Assembly.GetEntryAssembly();
             var build = assembly.GetCustomAttribute<AssemblyDescriptionAttribute>().Description;
             var version = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>().InformationalVersion;
             var title = assembly.GetCustomAttribute<AssemblyTitleAttribute>().Title;
-            var banner = $"Starting {title} version {version} {build}.";
+            return $"{title} version {version} {build}.";
+        }
 
-            bool isWindows = IsWindows();
-            bool isService = isWindows && args.Contains("-service");
-            
-            if (isService)
+        private static IConfiguration BuildUnifiedConfiguration()
+        {
+            var firstPassBuilder = new ConfigurationBuilder();
+            AddConfigurationSourcesToBuilder(firstPassBuilder);
+            var firstPassConfiguration = firstPassBuilder.Build();
+
+            var keyVaultConfiguration = firstPassConfiguration.GetSection(ConfigurationPath.Combine("Server", "KeyVault"));
+            var useKeyVaultForConfiguration = firstPassConfiguration.GetValue<bool>(ConfigurationPath.Combine("Server", "ConfigureFromKeyVault"));
+
+            if (keyVaultConfiguration.Exists() && useKeyVaultForConfiguration)
             {
-                Directory.SetCurrentDirectory(GetExecutableDirectory());
+                var builder = new ConfigurationBuilder();
+                AddConfigurationSourcesToBuilder(builder, keyVaultConfiguration);
+                return builder.Build();
             }
             else
             {
-                Console.WriteLine(banner);
-            }
-
-            var webHost = CreateWebHostBuilder(isService).Build();
-            var logger = webHost.Services.GetRequiredService<ILogger<Program>>();
-            logger.LogInformation(banner);
-
-            if (isWindows)
-            {
-                bool useTcb = args.Contains("-tcb");
-                ConfigureProcessPrivileges(logger, useTcb);
-            }
-
-            if (isService)
-            {
-                webHost.RunAsService();
-            }
-            else
-            {
-                webHost.Run();
+                return firstPassConfiguration;
             }
         }
 
-        private static IWebHostBuilder CreateWebHostBuilder(bool service)
-        {
-            var hostConfig = SetupConfiguration(new ConfigurationBuilder().SetBasePath(Directory.GetCurrentDirectory()))
-                .Build();
-
-            return new WebHostBuilder()
-                .UseUrls(hostConfig.GetValue("Server:Urls", "http://*:9000"))
-                .UseContentRoot(Directory.GetCurrentDirectory())
-                .UseConfiguration(hostConfig.GetSection("Configuration:Host"))
-                .ConfigureAppConfiguration((hostingContext, config) =>
-                {
-                    var env = hostingContext.HostingEnvironment;
-                    SetupConfiguration(config, hostConfig, reload: true);
-                })
-                .ConfigureLogging((hostingContext, logging) =>
-                {
-                    var loggingSection = hostingContext.Configuration.GetSection("Configuration:Logging");
-                    if (loggingSection.Exists())
-                    {
-                        logging.AddConfiguration(loggingSection);
-                    }
-                    else
-                    {
-                        var level = hostingContext.Configuration.GetValue<LogLevel>("Server:LogLevel", LogLevel.Information);
-                        logging.AddFilter(null, level);
-                    }
-                    
-                    if (service)
-                    {
-                        logging.AddProvider(new DeferringLoggerProvider(new EventLogLoggerProvider(new EventLogSettings
-                        {
-                            SourceName = "OAKProxy"
-                        })));
-                    }
-                    else
-                    {
-                        logging.AddConsole();
-                    }
-                })
-                .UseDefaultServiceProvider((context, options) =>
-                {
-                    options.ValidateScopes = context.HostingEnvironment.IsDevelopment();
-                })
-                .UseKestrel((builderContext, options) =>
-                {
-                    options.Configure(builderContext.Configuration.GetSection("Configuration:Kestrel"));
-                })
-                .ConfigureServices((context, services) => {
-                    services.AddOptions<ApplicationOptions>()
-                        .Bind(context.Configuration)
-                        .ValidateDataAnnotations();
-                })
-                .UseStartup<Startup>();
-        }
-
-        private static bool IsWindows()
-        {
-            return RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
-        }
-
-        private static IConfigurationBuilder SetupConfiguration(IConfigurationBuilder builder, IConfiguration hostConfiguration = null, bool reload = false)
+        private static void AddConfigurationSourcesToBuilder(IConfigurationBuilder builder, IConfigurationSection keyVaultConfiguration = null)
         {
             const string nameBase = "oakproxy";
             const string configFileExtension = "yml";
@@ -148,7 +128,7 @@ namespace OAKProxy
             string configFile = Path.Combine(configDirectory, configFileName);
             if (File.Exists(configFile))
             {
-                builder.AddYamlFile(configFile, optional: false, reloadOnChange: reload);
+                builder.AddYamlFile(configFile, optional: false, reloadOnChange: true);
             }
 
             // The central config map directory
@@ -162,22 +142,20 @@ namespace OAKProxy
             string localConfigFile = Path.Combine(GetExecutableDirectory(), configFileName);
             if (File.Exists(localConfigFile))
             {
-                builder.AddYamlFile(localConfigFile, optional: false, reloadOnChange: reload);
+                builder.AddYamlFile(localConfigFile, optional: false, reloadOnChange: true);
             }
 
             // The current directory config file
             string workingConfigFile = Path.Combine(Directory.GetCurrentDirectory(), configFileName);
             if (File.Exists(workingConfigFile))
             {
-                builder.AddYamlFile(workingConfigFile, optional: false, reloadOnChange: reload);
+                builder.AddYamlFile(workingConfigFile, optional: false, reloadOnChange: true);
             }
 
             // Azure Key Vault
-            var keyVaultSection = hostConfiguration?.GetSection("Server:KeyVault");
-            var useKeyVaultConfiguration = hostConfiguration?.GetValue<bool>("Server:ConfigureFromKeyVault") ?? true;
-            if (keyVaultSection != null && keyVaultSection.Exists() && useKeyVaultConfiguration)
+            if (keyVaultConfiguration != null && keyVaultConfiguration.Exists())
             {
-                var options = new KeyVaultOptions(keyVaultSection);
+                var options = new KeyVaultOptions(keyVaultConfiguration);
 
                 if (options.ClientId == null)
                 {
@@ -199,67 +177,17 @@ namespace OAKProxy
 
             // Environment
             builder.AddEnvironmentVariables("O_");
-
-            return builder;
         }
 
-        private static string GetExecutableDirectory()
+        private static bool IsWindows()
+        {
+            return RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+        }
+
+        public static string GetExecutableDirectory()
         {
             var pathToExe = Process.GetCurrentProcess().MainModule.FileName;
             return Path.GetDirectoryName(pathToExe);
-        }
-
-        private static void ConfigureProcessPrivileges(ILogger logger, bool useTcb)
-        {
-            var process = Process.GetCurrentProcess();
-            var tcbState = process.GetPrivilegeState(Privilege.TrustedComputerBase);
-
-            if (tcbState != PrivilegeState.Removed)
-            {
-                logger.LogWarning("Process is assigned excessive privileges. TrustedComputerBase is not required.");
-            }
-
-            if (useTcb)
-            {
-                if (tcbState == PrivilegeState.Removed)
-                {
-                    logger.LogCritical("TrustedComputerBase privilege was requested, but not assigned to the process.");
-                    throw new SystemException("Requested Privilege not held");
-                }
-                else if (tcbState == PrivilegeState.Disabled)
-                {
-                    try
-                    {
-                        process.EnablePrivilege(Privilege.TrustedComputerBase);
-                        logger.LogInformation("Successfully enabled the TrustedComputerBase privilege.");
-                    }
-                    catch (Exception e)
-                    {
-                        logger.LogCritical(e, "Failed to enable the TrustedComputerBase privilege.");
-                        throw e;
-                    }
-                }
-                else
-                {
-                    logger.LogInformation("The requested TrustedComputerBase privilege is already enabled.");
-                }
-            }
-            else
-            {
-                if (tcbState == PrivilegeState.Enabled)
-                {
-                    try
-                    {
-                        process.DisablePrivilege(Privilege.TrustedComputerBase);
-                        logger.LogInformation("Successfully disabled the TrustedComputerBase privilege.");
-                    }
-                    catch (Exception e)
-                    {
-                        logger.LogCritical(e, "Failed to disable the TrustedComputerBase privilege.");
-                        throw e;
-                    }
-                }
-            }
         }
     }
 }
