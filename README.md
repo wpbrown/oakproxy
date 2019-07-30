@@ -65,18 +65,29 @@ Feature | OAKProxy | Azure AD App Proxy
 JWT Pre-Authentication | Yes | User Only
 PaaS Frontend | No | Yes
 Outbound Tunneling | No | Yes
-Multi-Region Ingress | Deployable | No
+Multi-Region Ingress | Deployable | No ([In Development](https://feedback.azure.com/forums/169401-azure-active-directory/suggestions/30945478-link-a-connector-to-a-different-application-proxy))
 Open Source | Yes | No
 Service Principal KCD | Yes | No
 License Required | No | Yes
 Header-based Authentication | Yes | With Ping Access
 Supported IdPs | Any OIDC | Azure AD
 
+Other alternative tools include [Windows Server Web Application Proxy](https://docs.microsoft.com/en-us/windows-server/remote/remote-access/web-application-proxy/web-application-proxy-windows-server) and [Pomerium](https://www.pomerium.io/).
+
 # Resources
 
+Documentation
+
 * [Documentation](https://github.com/wpbrown/oakproxy/blob/master/docs/README.md)
+* [Domain-joined VM Reference Architecture](https://github.com/wpbrown/oakproxy/tree/master/refarch/domainvm)
+
+Downloads
+
 * [Downloads](https://github.com/wpbrown/oakproxy/releases)
 * [Official Docker Images](https://hub.docker.com/r/rebeagle/oakproxy)
+
+Development
+
 * [Development Lab](https://github.com/wpbrown/azentlab)
 * [Project Roadmap](https://github.com/wpbrown/oakproxy/projects/2)
 * [Wiki](https://github.com/wpbrown/oakproxy/wiki)
