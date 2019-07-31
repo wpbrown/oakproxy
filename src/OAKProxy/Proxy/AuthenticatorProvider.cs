@@ -11,7 +11,7 @@ namespace OAKProxy.Proxy
     {
         private readonly Dictionary<string, IEnumerable<IAuthenticator>> _authenticators = new Dictionary<string, IEnumerable<IAuthenticator>>();
 
-        public AuthenticatorProvider(IServiceProvider provider, IOptions<ApplicationOptions> options)
+        public AuthenticatorProvider(IServiceProvider provider, IOptions<ProxyOptions> options)
         {
             foreach (var application in options.Value.Applications)
             {

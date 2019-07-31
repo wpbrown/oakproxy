@@ -10,7 +10,7 @@ namespace OAKProxy.Proxy
     public class ProxyMessageHandlerBuilder
     {
         private readonly HttpMessageHandlerBuilder _builder;
-        private Lazy<HttpClientHandler> _anonymousHandler = new Lazy<HttpClientHandler>(() => CreateDefaultPrimaryClient());
+        private Lazy<SocketsHttpHandler> _anonymousHandler = new Lazy<SocketsHttpHandler>(() => CreateDefaultPrimaryClient());
 
         internal ProxyMessageHandlerBuilder(HttpMessageHandlerBuilder builder)
         {
@@ -20,12 +20,12 @@ namespace OAKProxy.Proxy
             AuthenticatorHandlers = new List<AuthenticatorHandler>();
         }
 
-        public HttpClientHandler PrimaryAuthenticatedHandler
+        public SocketsHttpHandler PrimaryAuthenticatedHandler
         {
-            get => (HttpClientHandler)_builder.PrimaryHandler;
+            get => (SocketsHttpHandler)_builder.PrimaryHandler;
         }
 
-        public HttpClientHandler PrimaryAnonymousHandler
+        public SocketsHttpHandler PrimaryAnonymousHandler
         {
             get => _anonymousHandler.Value;
         }
@@ -37,8 +37,8 @@ namespace OAKProxy.Proxy
             get => _builder.Services;
         }
 
-        internal static HttpClientHandler CreateDefaultPrimaryClient() =>
-            new HttpClientHandler
+        internal static SocketsHttpHandler CreateDefaultPrimaryClient() =>
+            new SocketsHttpHandler
             {
                 AllowAutoRedirect = false,
                 UseCookies = false,

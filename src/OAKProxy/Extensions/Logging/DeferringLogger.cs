@@ -1,10 +1,8 @@
 ﻿using Microsoft.Extensions.Logging;
-using ProcessPrivileges;
+using OAKProxy.ProcessPrivileges;
 using System;
-using System.Collections.Generic;
-using System.Text;
 
-namespace OAKProxy.Logging
+namespace OAKProxy.Extensions.Logging
 {
     class DeferringLogger : ILogger
     {

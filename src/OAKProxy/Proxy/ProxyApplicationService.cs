@@ -10,9 +10,9 @@ namespace OAKProxy.Proxy
     public class ProxyApplicationService : IProxyApplicationService
     {
         private readonly ProxyApplication _activeApplication;
-        private readonly ApplicationOptions _options;
+        private readonly ProxyOptions _options;
 
-        public ProxyApplicationService(IHttpContextAccessor context, IOptions<ApplicationOptions> options)
+        public ProxyApplicationService(IHttpContextAccessor context, IOptions<ProxyOptions> options)
         {
             _options = options.Value;
 

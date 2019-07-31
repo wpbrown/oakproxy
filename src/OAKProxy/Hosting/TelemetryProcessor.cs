@@ -4,14 +4,14 @@ using Microsoft.ApplicationInsights.Extensibility;
 using Microsoft.AspNetCore.Http;
 using OAKProxy.Proxy;
 
-namespace OAKProxy
+namespace OAKProxy.Hosting
 {
-    public class TelemetryProcessor : ITelemetryProcessor
+    public class OakproxyTelemetryProcessor : ITelemetryProcessor
     {
         private ITelemetryProcessor _next { get; set; }
         private static readonly PathString _healthPath = ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.Health);
 
-        public TelemetryProcessor(ITelemetryProcessor next)
+        public OakproxyTelemetryProcessor(ITelemetryProcessor next)
         {
             _next = next;
         }

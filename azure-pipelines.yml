@@ -48,13 +48,13 @@ jobs:
       arguments: sources update -Name corefx-s4u -Username vsts -Password "$(System.AccessToken)" -StorePasswordInClearText -ConfigFile src/OAKProxy/Nuget.Config
   - script: |
       dotnet --version
-      dotnet publish -c Release -f netcoreapp2.2 -r win-x64 --self-contained true
+      dotnet publish -c Release -f netcoreapp3.0 -r win-x64 --self-contained true
     workingDirectory: src/OAKProxy
     displayName: Build
   - task: PublishPipelineArtifact@0
     inputs:
       artifactName: oakproxy-windows
-      targetPath: src/OAKProxy/bin/Release/netcoreapp2.2/win-x64/publish
+      targetPath: src/OAKProxy/bin/Release/netcoreapp3.0/win-x64/publish
 - job: build_linux
   dependsOn: get_sdk_version
   displayName: Build Linux
@@ -77,10 +77,10 @@ jobs:
       arguments: sources remove -Name corefx-s4u -ConfigFile src/OAKProxy/NuGet.Config
   - script: |
       dotnet --version
-      dotnet publish -c Release -f netcoreapp2.2 -r linux-x64 --self-contained false
+      dotnet publish -c Release -f netcoreapp3.0 -r linux-x64 --self-contained false
     workingDirectory: src/OAKProxy
     displayName: Build
   - task: PublishPipelineArtifact@0
     inputs:
       artifactName: oakproxy-linux
-      targetPath: src/OAKProxy/bin/Release/netcoreapp2.2/linux-x64/publish
+      targetPath: src/OAKProxy/bin/Release/netcoreapp3.0/linux-x64/publish
