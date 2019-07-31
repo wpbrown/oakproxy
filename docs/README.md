@@ -363,7 +363,7 @@ Azure Key Vault | If Azure Key Vault is configured. Key Vault use separator `--`
 Working Directory YAML | `oakproxy.yml` if it exists in the current working directory.
 Installation Directory YAML | `oakproxy.yml` if it exists in the directory where the OAKProxy executable is installed.
 Key Per File Directory | Each file in the directory represents a key and the content of the file is the value. This uses `__` as a separator. The directory is `/etc/oakproxy/config` on Linux and typically `C:\ProgramData\oakproxy\config` on Windows or `C:\oakproxy\config` in a Windows Container. This supports using Kubernetes ConfigMaps and Secrets.
-Configuration Directory YAML | `oakproxy.yml` if it exists in the system configuration directory: `/etc/oakproxy` on Linux and typically `C:\ProgramData\oakproxy` on Windows or `C:\oakproxy` in a Windows Container.
+Configuration Directory YAML | `oakproxy.yml` if it exists in the system configuration directory: `/etc/oakproxy` on Linux and typically `C:\ProgramData\oakproxy` on Windows.
 
 ## Configuration File Schema
 
@@ -385,6 +385,8 @@ UseForwardedHeaders | `false` | Use scheme, host, and port headers forwarded by 
 LogLevel | `Information` | Log verbosity. [Valid values](https://docs.microsoft.com/en-us/aspnet/core/fundamentals/logging/?view=aspnetcore-2.2#log-level).
 ApplicationInsightsKey | *optional* | If provided, OAKProxy will feed information to [Azure Application Insights](https://docs.microsoft.com/en-us/azure/azure-monitor/app/app-insights-overview).
 EnableHealthChecks | `false` | Listen at `/.oakproxy/health` for health probes from gateways/load-balancers.
+UseAzureApplicationGateway | `false` | Implies `UseForwardedHeaders` and `EnableHealthChecks`. Configures proper header forwarding from Azure Application Gateway to OAKProxy.
+HttpsCertificate | *optional* | A single certificate object used as the default certificate for all applications' incoming HTTPS.
 KeyVault | *optional* | A single Azure Key Vault object.
 ConfigureFromKeyVault | `true` | If a Key Vault object is provided, load any available configuration secrets from it. Set to `false` to prevent reading configuration from Key Vault.
 KeyManagement | *optional* | A single Key Management object to configure key management for session cookie encryption. If not provided, [default key management](https://docs.microsoft.com/en-us/aspnet/core/security/data-protection/configuration/default-settings?view=aspnetcore-2.2#key-management) will be used.

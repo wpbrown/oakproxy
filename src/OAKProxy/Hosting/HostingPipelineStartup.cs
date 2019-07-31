@@ -19,7 +19,7 @@ namespace OAKProxy.Hosting
         {
             return builder =>
             {
-                if (_serverOptionsAccessor.Value.EnableHealthChecks)
+                if (_serverOptionsAccessor.Value.EnableHealthChecks || _serverOptionsAccessor.Value.UseAzureApplicationGateway)
                     builder.UseHealthChecks(ProxyMetaEndpoints.FullPath(ProxyMetaEndpoints.Health));
 
                 builder.UseStatusCodePages(Errors.StatusPageAsync);

@@ -1,8 +1,5 @@
-﻿using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Configuration;
+﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
-using OAKProxy.Authenticator.Bearer;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
@@ -16,6 +13,8 @@ namespace OAKProxy.Hosting
     {
         public bool UseForwardedHeaders { get; set; }
 
+        public bool UseAzureApplicationGateway { get; set; }
+
         [EnumDataType(typeof(LogLevel))]
         public string LogLevel { get; set; }
 
@@ -28,9 +27,22 @@ namespace OAKProxy.Hosting
 
         public KeyManagement KeyManagement { get; set; }
 
+        public X509Certificate2 HttpsCertificate { get; private set; }
+
         internal LogLevelEnum LogLevelInternal
         {
             get => Enum.TryParse(LogLevel, out LogLevelEnum result) ? result : LogLevelEnum.Information;
+        }
+
+        public void Configure(IConfiguration configuration)
+        {
+            ConfigurationBinder.Bind(configuration, this);
+
+            var httpsCertificateSection = configuration.GetSection("HttpsCertificate");
+            if (httpsCertificateSection.Exists())
+            {
+                HttpsCertificate = KeyVaultOptions.LoadCertificateFromConfig(httpsCertificateSection);
+            }
         }
     }
 

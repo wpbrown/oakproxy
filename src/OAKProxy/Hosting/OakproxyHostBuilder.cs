@@ -30,7 +30,9 @@ namespace OAKProxy.Hosting
         {
             var builder = new HostBuilder();
 
-            var serverOptions = ConfigurationBinder.Get<OakproxyServerOptions>(configuration.GetSection("Server"));
+            var serverOptions = new OakproxyServerOptions();
+            serverOptions.Configure(configuration.GetSection("Server"));
+
             var proxyOptions = ConfigurationBinder.Get<ProxyOptions>(configuration);            
             if (!OptionsAreValid(serverOptions, logger, "Server") || !OptionsAreValid(proxyOptions, logger))
             {
@@ -98,7 +100,7 @@ namespace OAKProxy.Hosting
 
                     services.AddTransient<IStartupFilter, HostingPipelineStartup>();
 
-                    if (serverOptions.UseForwardedHeaders)
+                    if (serverOptions.UseForwardedHeaders || serverOptions.UseAzureApplicationGateway)
                     {
                         services.Configure<ForwardedHeadersOptions>(options =>
                         {
@@ -106,6 +108,11 @@ namespace OAKProxy.Hosting
                             options.KnownNetworks.Clear();
                             options.KnownProxies.Clear();
                             subsystemConfiguration.ForwardedHeaders.Bind(options);
+
+                            if (serverOptions.UseAzureApplicationGateway)
+                            {
+                                options.ForwardedHostHeaderName = "X-Original-Host";
+                            }
                         });
                     }
 
@@ -215,6 +222,11 @@ namespace OAKProxy.Hosting
                     configure.UseKestrel((builderContext, options) =>
                     {
                         options.Configure(subsystemConfiguration.Kestrel);
+
+                        if (serverOptions.HttpsCertificate != null)
+                        {
+                            options.ConfigureHttpsDefaults(configureHttps => configureHttps.ServerCertificate = serverOptions.HttpsCertificate);
+                        }
                     });
                     configure.Configure(builder => builder.UseOakproxy());
                 });

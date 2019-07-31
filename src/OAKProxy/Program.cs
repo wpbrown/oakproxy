@@ -111,18 +111,19 @@ namespace OAKProxy
             const string configMapDirectoryName = "config";
             string configFileName = $"{nameBase}.{configFileExtension}";
 
-            string configDirectory;
-            if (IsWindows())
+            static string ConfigDirectory()
             {
-                string baseConfigDirectory = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData, Environment.SpecialFolderOption.DoNotVerify);
-                if (String.IsNullOrEmpty(baseConfigDirectory))
-                    baseConfigDirectory = @"C:\";
-                configDirectory = Path.Combine(baseConfigDirectory, nameBase);
-            }
-            else
-            {
-                configDirectory = "/etc";
-            }
+                if (IsWindows())
+                {
+                    string commonAppData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData, Environment.SpecialFolderOption.DoNotVerify);
+                    return String.IsNullOrEmpty(commonAppData) ? @"C:\ProgramData" : commonAppData;
+                }
+                else
+                {
+                    return "/etc";
+                }
+            };
+            string configDirectory = Path.Combine(ConfigDirectory(), nameBase);
 
             // The central config file
             string configFile = Path.Combine(configDirectory, configFileName);
