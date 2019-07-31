@@ -744,19 +744,21 @@ Configuration:
 
 ### HTTPS
 
-It's recommended that HTTPS be terminated by a gateway. If OAKProxy is directly receiving HTTPS traffic you must configure a certificate in [Kestrel](https://docs.microsoft.com/en-us/aspnet/core/fundamentals/servers/kestrel?view=aspnetcore-2.2#endpoint-configuration). Below is an example of one default certificate for all host names stored the Computer certificate store:
+It's recommended that HTTPS be terminated by a gateway. If OAKProxy is directly receiving HTTPS traffic you must configure a certificate.
+
+Below is an example of one default certificate for all host names stored the Computer certificate store:
 
 ```yaml
-Configuration:
-  Kestrel:
-    Certificates:
-      Default:
-        Subject: 'hr.contoso.com'
-        Store: My
-        Location: LocalMachine
+Server:
+  HttpsCertificate:
+    Subject: 'hr.contoso.com'
+    Store: My
+    Location: LocalMachine
 ```
 
-SNI is not currently supported.
+SNI support is [planned](https://github.com/wpbrown/oakproxy/issues/49).
+
+More complex combinations of listeners and certificates is possible by directly configuring [Kestrel](https://docs.microsoft.com/en-us/aspnet/core/fundamentals/servers/kestrel?view=aspnetcore-2.2#endpoint-configuration) using the `Configuration:Kestrel` [section](#Subsystem-Configuration). 
 
 # Troubleshooting
 
