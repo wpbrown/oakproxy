@@ -1,7 +1,7 @@
 ![OAKProxy](docs/images/title.svg)
 <hr/>
 
-[![Build Status](https://dev.azure.com/rebeagle/oakproxy/_apis/build/status/oakproxy?branchName=corefx3)](https://dev.azure.com/rebeagle/oakproxy/_build/latest?definitionId=7&branchName=corefx3)
+[![Build Status](https://dev.azure.com/rebeagle/oakproxy/_apis/build/status/oakproxy?branchName=master)](https://dev.azure.com/rebeagle/oakproxy/_build/latest?definitionId=7&branchName=master)
 
 OAKProxy is a self-hosted open source cloud identity-aware proxy for OpenID Connect and OAuth 2. It allows you to securely and reliably bring all the power of modern cloud identity providers like Azure AD to all of your applications. It works in _both_ client to service _and_ service to service scenarios to create a bridge between modern authentication and a number of different legacy authentication mechanisms. It allows containerized, PaaS, or other modern client architectures to integrate with legacy systems using only HTTPS and modern authentication protocols.
 
