@@ -1,6 +1,6 @@
 ﻿<Project>
   <PropertyGroup>
-    <Version>0.3.2</Version>
+    <Version>0.3.3</Version>
     <Description Condition=" '$(BUILD_BUILDID)' == '' ">Developer Build</Description>
     <Description Condition=" '$(BUILD_BUILDID)' != '' ">Official Build $(BUILD_BUILDID)</Description>
     <FileVersion Condition=" '$(BUILD_BUILDID)' != '' ">$(Version).$(BUILD_BUILDID)</FileVersion>
