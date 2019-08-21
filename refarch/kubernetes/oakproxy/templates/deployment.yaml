@@ -1,0 +1,76 @@
+{{- $fullName := include "oakproxy.fullname" . -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fullName }}
+  labels:
+{{ include "oakproxy.labels" . | indent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "oakproxy.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "oakproxy.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+    {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+      securityContext:
+        fsGroup: 1001
+        runAsUser: 1001
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: O_Server__KeyManagement__StoreToFilePath
+              value: /var/oakproxykeystorage
+            - name: O_Server__KeyManagement__ProtectWithCertificate__Path
+              value: /etc/oakproxy/keystorecert.pfx
+            - name: O_Server__KeyManagement__ProtectWithCertificate__Password
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "Secret name with password for key storage certificate is required." .Values.keyStorage.secretName }}
+                  key: password
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /.oakproxy/health
+              port: 8080
+            periodSeconds: 10
+            timeoutSeconds: 3
+          volumeMounts:
+            - name: configvol
+              mountPath: /etc/oakproxy
+            - name: keystoragevol
+              mountPath: /var/oakproxykeystorage
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: configvol
+          configMap:
+            name: {{ $fullName }}
+        - name: keystoragevol
+          persistentVolumeClaim:
+            claimName: {{ $fullName }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}

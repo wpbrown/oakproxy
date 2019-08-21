@@ -269,6 +269,8 @@ Once all the prerequisites are in place deployment is straightforward.
 
    For private deployments, update the private A records for your proxied application hostnames to point to the internal load balancer IP address in the `internalLoadBalancerIpAddress` value.
 
+Installation is complete. Test the application at its public or private hostname.
+
 # DevOps Integration
 
 Ongoing operations and maintenance of the service should follow a DevOps process. Assuming secrets have been stored in Key Vault, the 2 JSON documents above can be checked in to source control along with your OAKProxy configuration file. The original deployment process above can be rerun in a DevOps pipeline to ensure the entire service including the VM configuration is in the desired state. 

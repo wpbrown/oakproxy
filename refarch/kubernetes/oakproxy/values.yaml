@@ -1,0 +1,37 @@
+replicaCount: 3
+
+image:
+  repository: rebeagle/oakproxy
+  tag: 0.3.3-linux
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+ingress:
+  enabled: true
+  annotations: 
+    kubernetes.io/ingress.class: azure/application-gateway
+  hosts: []
+#    - exampleapp.contoso.com
+  tls: []
+#    - secretName: example-contoso-tls
+#      hosts:
+#        - exampleapp.contoso.com
+
+# oakproxyConfiguration: 
+
+keyStorage: {}
+#   storageClass: 
+#   certificate: 
+#   secretName: 
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+resources:
+  requests:
+    memory: 512Mi
+    cpu: 500m
