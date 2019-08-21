@@ -89,7 +89,7 @@ Name | Type | Description
 --- | --- | ---
 `azurefileszrs` | Kubernetes Storage Class | The name of your shared storage with sufficient redundancy for your deployment.
 `oakproxykeystorecert` | Kubernetes Secret | An opaque secret with a key `password`. This is the password to the pfx supplied in `keyStorage.certificate`
-`keystorecert.pfx` | File | A PKCS12 self-signed certificate (binary file) for encrypted the stored session keys.
+`keystorecert.pfx` | File | A PKCS12 self-signed certificate (binary file) for encrypting the stored session keys.
 `oakproxy.yml` | File | Your OAKProxy configuration file.
 `oakproxyhttps` | Kubernetes Secret | A `kubernetes.io/tls` secret with the certificate for the public hostname.
 `billingapp.contoso.com` | DNS Record | A CNAME record that maps to the Azure Application Gateway.

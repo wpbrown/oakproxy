@@ -80,6 +80,7 @@ Documentation
 
 * [Documentation](https://github.com/wpbrown/oakproxy/blob/master/docs/README.md)
 * [Domain-joined VM Reference Architecture](https://github.com/wpbrown/oakproxy/tree/master/refarch/domainvm)
+* [Kubernetes Reference Architecture](https://github.com/wpbrown/oakproxy/tree/master/refarch/kubernetes)
 
 Downloads
 
