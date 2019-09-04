@@ -40,7 +40,7 @@ namespace OAKProxy.Hosting
             }
 
             var subsystemConfiguration = ConfigurationBinder.Get<HostingSubsystemConfiguration>(configuration.GetSection("Configuration"),
-                binderOptions => binderOptions.BindNonPublicProperties = true);
+                binderOptions => binderOptions.BindNonPublicProperties = true) ?? HostingSubsystemConfiguration.Empty();
 
             builder
                 .UseContentRoot(Program.GetExecutableDirectory())

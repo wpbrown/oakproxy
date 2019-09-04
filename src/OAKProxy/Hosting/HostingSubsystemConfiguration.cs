@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Configuration;
+﻿using System;
+using Microsoft.Extensions.Configuration;
 
 namespace OAKProxy.Hosting
 {
@@ -13,5 +14,18 @@ namespace OAKProxy.Hosting
         public IConfigurationSection Host { get; private set; }
 
         public IConfigurationSection Logging { get; private set; }
+
+        public static HostingSubsystemConfiguration Empty()
+        {
+            var empty = new ConfigurationRoot(new IConfigurationProvider[] { }).GetSection(String.Empty);
+            return new HostingSubsystemConfiguration
+            {
+                Kestrel = empty,
+                ApplicationInsights = empty,
+                ForwardedHeaders = empty,
+                Host = empty,
+                Logging = empty
+            };
+        }
     }
 }
